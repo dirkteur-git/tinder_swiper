@@ -225,10 +225,18 @@ export const mockJobs: Job[] = [
         reasonLong:
           "Vondr-brandscript heeft een verboden-term-lijst waarop 'platform' staat (te generiek, klinkt als concurrent). In deze pitch is de term 0x gevallen — Milan gebruikte consistent 'brein' en 'systeem'. Bevestigen als positief signaal voor het language-model.",
         facts: [
-          { label: "Verboden term", value: "platform" },
-          { label: "Voorkomens in pitch", value: "0×", variant: "highlight" },
-          { label: "Gebruikt i.p.v.", value: "'brein' / 'systeem'", variant: "new" },
-          { label: "Door", value: "Milan (consistent door hele pitch)" }
+          {
+            label: "Wat we zagen",
+            value:
+              "Term 'platform' werd 0× gebruikt in deze pitch. Milan koos consistent voor 'brein' en 'systeem'.",
+            variant: "highlight"
+          },
+          {
+            label: "Vastleggen als",
+            value: "Positief signaal — brandscript-discipline werkt",
+            variant: "new"
+          },
+          { label: "Door", value: "Milan (hele pitch)" }
         ],
         bron: "Meeting 2026-04-02 — full transcript"
       },

@@ -8,8 +8,8 @@ import {
   animate
 } from "framer-motion";
 import { forwardRef, useImperativeHandle, useState, useRef } from "react";
-import type { Question, Decision } from "@/lib/types";
-import { Info } from "lucide-react";
+import type { Fact, Question, Decision } from "@/lib/types";
+import { ArrowDown, X as XIcon } from "lucide-react";
 
 export type SwipeDirection = "left" | "right" | "up";
 
@@ -26,7 +26,7 @@ interface Props {
   topic: string;
   topicSubject: string;
   isTop: boolean;
-  stackIndex: number; // 0 = top
+  stackIndex: number;
   onSwiped: (dir: SwipeDirection, decision: Decision, q: Question) => void;
   onTap: (q: Question) => void;
 }
@@ -37,7 +37,7 @@ const VELOCITY_THRESHOLD = 500;
 export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
   {
     question,
-    jobTitle,
+    jobTitle: _jobTitle,
     topic,
     topicSubject,
     isTop,
@@ -140,7 +140,6 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
     }
   }
 
-  // Houd de stack-z-indexes laag zodat overlays (z-40+) er bovenop kunnen.
   const cardZ = 10 - stackIndex;
   const baseScale = isTop ? 1 : 1 - stackIndex * 0.04;
   const baseTranslateY = isTop ? 0 : stackIndex * 12;
@@ -212,8 +211,8 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
           </>
         )}
 
-        {/* Topic-header — groot, vertelt direct waar dit over gaat */}
-        <div className="border-b border-line bg-surface-soft px-5 pb-3 pt-5">
+        {/* Header */}
+        <div className="flex-shrink-0 border-b border-line bg-surface-soft px-5 pb-3 pt-4">
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
               {topic}
@@ -222,98 +221,250 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
               {question.externalId ?? `q-${question.position}`}
             </span>
           </div>
-          <h1 className="mt-1.5 text-xl font-black leading-tight tracking-tight text-ink-900">
+          <h1 className="mt-1 truncate text-base font-semibold leading-tight text-ink-700">
             {topicSubject}
           </h1>
           {question.type && (
-            <div className="mt-2 inline-flex rounded-full bg-ink-900 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+            <div className="mt-2 inline-flex rounded-full bg-ink-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
               {question.type}
             </div>
           )}
         </div>
 
-        {/* Visual */}
-        <div className="relative h-28 w-full flex-shrink-0 bg-bg">
-          {question.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
+        {/* Optionele afbeelding (alleen tonen als beschikbaar) */}
+        {question.imageUrl && (
+          <div className="h-28 w-full flex-shrink-0 overflow-hidden bg-bg">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={question.imageUrl}
               alt=""
               className="h-full w-full object-cover"
               draggable={false}
             />
-          ) : (
-            <PlaceholderViz q={question} />
-          )}
+          </div>
+        )}
+
+        {/* HERO — het daadwerkelijke voorstel */}
+        <div className="flex flex-1 flex-col justify-center overflow-hidden p-5">
+          <CardHero
+            facts={question.facts}
+            suggestionFallback={question.suggestion}
+          />
         </div>
 
-        {/* Content */}
-        <div className="flex flex-1 flex-col gap-3 overflow-hidden p-5">
-          <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
-            AI stelt voor
-          </div>
-          <h2 className="text-lg font-semibold leading-tight text-ink-900">
-            {question.suggestion}
-          </h2>
-
-          <div className="mt-1 flex items-start gap-2 rounded-xl bg-surface-soft p-3 text-sm text-ink-700 ring-1 ring-line">
-            <Info size={16} className="mt-0.5 flex-shrink-0 text-ink-500" />
-            <p className="leading-snug">{question.reason}</p>
-          </div>
-
-          {question.bron && (
-            <div className="mt-auto text-[11px] text-ink-400">
-              Bron: {question.bron}
-            </div>
-          )}
-
-          <div className="text-[11px] text-ink-400">
-            Tik voor de volledige onderbouwing →
-          </div>
+        {/* Footer-hint */}
+        <div className="flex-shrink-0 border-t border-line bg-surface-soft px-5 py-2.5 text-center text-[11px] text-ink-400">
+          Tik voor onderbouwing
         </div>
       </div>
     </motion.div>
   );
 });
 
-function PlaceholderViz({ q }: { q: Question }) {
-  // Subtiele varianten voor light-mode
-  const seed = q.id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const hue = (seed * 37) % 360;
-  return (
-    <div
-      className="relative h-full w-full"
-      style={{
-        background: `linear-gradient(135deg, hsl(${hue} 25% 95%), hsl(${(hue + 40) % 360} 30% 88%))`
-      }}
-    >
-      <svg
-        className="absolute inset-0 h-full w-full opacity-30"
-        viewBox="0 0 200 100"
-        preserveAspectRatio="none"
-      >
-        <defs>
-          <pattern
-            id={`g-${q.id}`}
-            width="20"
-            height="20"
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d="M 20 0 L 0 0 0 20"
-              fill="none"
-              stroke="#0f1c2e"
-              strokeWidth="0.4"
-            />
-          </pattern>
-        </defs>
-        <rect width="200" height="100" fill={`url(#g-${q.id})`} />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="text-4xl font-black tracking-tight text-ink-300">
-          {q.externalId ?? "•"}
-        </div>
+/* ----------------------------- HERO + sub-blokken ----------------------------- */
+
+function CardHero({
+  facts,
+  suggestionFallback
+}: {
+  facts?: Fact[];
+  suggestionFallback: string;
+}) {
+  if (!facts || facts.length === 0) {
+    return <Fallback text={suggestionFallback} />;
+  }
+
+  const highlight = facts.find((f) => f.variant === "highlight");
+  const old1 = facts.find((f) => f.variant === "old");
+  const new1 = facts.find((f) => f.variant === "new");
+  const subject = facts.find((f) => !f.variant);
+
+  // Quote + voorgesteld antwoord (FAQ, objection)
+  if (highlight && new1) {
+    return (
+      <div className="flex flex-col gap-2">
+        <QuoteBlock label={highlight.label} text={highlight.value} />
+        <ArrowDivider />
+        <ProposedBlock label={new1.label} text={new1.value} />
       </div>
+    );
+  }
+
+  // Alleen quote (quote toevoegen aan deck)
+  if (highlight) {
+    const by = facts.find((f) => f.label.toLowerCase() === "door");
+    return (
+      <QuoteBlock
+        label={highlight.label}
+        text={highlight.value}
+        attribution={by?.value}
+        big
+      />
+    );
+  }
+
+  // Van → naar (hernoemen, classificatie, value-change, doctrine, brand-confirm)
+  if (old1 && new1) {
+    return (
+      <div className="flex flex-col gap-2">
+        {subject && (
+          <SubjectLine label={subject.label} text={subject.value} />
+        )}
+        <CurrentBlock label={old1.label} text={old1.value} />
+        <ArrowDivider />
+        <ProposedBlock label={new1.label} text={new1.value} />
+      </div>
+    );
+  }
+
+  // Brandscript-bevestiging (highlight + alleen new) wordt al gepakt door bovenste case.
+  // Maar voor het geval er alleen een new is zonder old/highlight:
+  if (new1 && !old1 && !highlight) {
+    return (
+      <div className="flex flex-col gap-2">
+        {subject && (
+          <SubjectLine label={subject.label} text={subject.value} />
+        )}
+        <ProposedBlock label={new1.label} text={new1.value} big />
+      </div>
+    );
+  }
+
+  // Alleen old → verwijderen
+  if (old1) {
+    const supporting = facts
+      .filter((f) => !f.variant && f !== old1)
+      .slice(0, 2);
+    return (
+      <div className="flex flex-col gap-3">
+        <RemovalBlock label={old1.label} text={old1.value} />
+        {supporting.length > 0 && (
+          <div className="space-y-1 text-xs text-ink-500">
+            {supporting.map((f, i) => (
+              <div key={i}>
+                <span className="text-ink-400">{f.label}:</span> {f.value}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return <Fallback text={suggestionFallback} />;
+}
+
+function SubjectLine({ label, text }: { label: string; text: string }) {
+  return (
+    <div className="rounded-lg bg-bg px-3 py-1.5 ring-1 ring-line">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+        {label}:
+      </span>{" "}
+      <span className="text-sm text-ink-700">{text}</span>
+    </div>
+  );
+}
+
+function QuoteBlock({
+  label,
+  text,
+  attribution,
+  big
+}: {
+  label: string;
+  text: string;
+  attribution?: string;
+  big?: boolean;
+}) {
+  return (
+    <div>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+        {label}
+      </div>
+      <div className="mt-1.5 border-l-[3px] border-ink-900 pl-3">
+        <p
+          className={`${big ? "line-clamp-6 text-lg" : "line-clamp-4 text-base"} font-medium leading-snug text-ink-900`}
+        >
+          &ldquo;{text}&rdquo;
+        </p>
+        {attribution && (
+          <p className="mt-2 text-xs text-ink-500">— {attribution}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CurrentBlock({ label, text }: { label: string; text: string }) {
+  return (
+    <div className="rounded-xl bg-bg px-4 py-3 ring-1 ring-line">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+        {label}
+      </div>
+      <div className="mt-0.5 line-clamp-2 text-base leading-snug text-ink-400 line-through decoration-ink-400/60">
+        {text}
+      </div>
+    </div>
+  );
+}
+
+function ProposedBlock({
+  label,
+  text,
+  big
+}: {
+  label: string;
+  text: string;
+  big?: boolean;
+}) {
+  return (
+    <div className="rounded-xl bg-accent-yes/[0.08] px-4 py-3 ring-1 ring-accent-yes/30">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent-yes">
+        {label}
+      </div>
+      <div
+        className={`${big ? "line-clamp-5 text-base" : "line-clamp-4 text-base"} mt-0.5 font-semibold leading-snug text-ink-900`}
+      >
+        {text}
+      </div>
+    </div>
+  );
+}
+
+function RemovalBlock({ label, text }: { label: string; text: string }) {
+  return (
+    <div className="rounded-xl bg-accent-no/[0.06] px-4 py-3 ring-1 ring-accent-no/25">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent-no">
+        {label}
+      </div>
+      <div className="mt-1 flex items-start gap-2">
+        <XIcon
+          size={18}
+          strokeWidth={3}
+          className="mt-0.5 flex-shrink-0 text-accent-no"
+        />
+        <span className="line-clamp-3 text-base font-medium leading-snug text-ink-900 line-through decoration-accent-no/50">
+          {text}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ArrowDivider() {
+  return (
+    <div className="flex items-center justify-center py-0.5 text-ink-400">
+      <ArrowDown size={20} strokeWidth={2.5} />
+    </div>
+  );
+}
+
+function Fallback({ text }: { text: string }) {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <p className="text-center text-lg font-semibold leading-tight text-ink-900">
+        {text}
+      </p>
     </div>
   );
 }
