@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --vondr-navy-950: #0a1320;
+  --vondr-navy-900: #0f1c2e;
+  --vondr-navy-800: #162640;
+  --vondr-navy-700: #1e3354;
+  --vondr-steel-100: #dde6f0;
+  --vondr-steel-200: #b9cadd;
+  --vondr-steel-300: #8faac5;
+  --vondr-steel-400: #647ea0;
+  --vondr-yes: #22c55e;
+  --vondr-no: #ef4444;
+  --vondr-maybe: #3b82f6;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--vondr-navy-950);
+  color: var(--vondr-steel-100);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+}
+
+body {
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-feature-settings: "ss01", "cv11";
+}
+
+/* No text-selection while dragging cards */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Custom scrollbar in modals */
+.scroll-soft::-webkit-scrollbar {
+  width: 6px;
+}
+.scroll-soft::-webkit-scrollbar-thumb {
+  background: var(--vondr-steel-400);
+  border-radius: 3px;
+}
+
+/* Safe-area insets voor iOS PWA */
+.safe-top { padding-top: max(env(safe-area-inset-top), 1rem); }
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 1rem); }
+
+/* Prevent pull-to-refresh from breaking swipe */
+html { overscroll-behavior: none; }
