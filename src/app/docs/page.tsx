@@ -4,30 +4,33 @@ import { BrandWordmark } from "@/components/BrandWordmark";
 
 export default function DocsPage() {
   return (
-    <div className="min-h-[100dvh] bg-navy-950 px-4 py-6">
+    <div className="min-h-[100dvh] bg-bg px-4 py-6">
       <div className="mx-auto max-w-2xl">
         <Link
           href="/inbox"
-          className="inline-flex items-center gap-1 text-sm text-steel-300"
+          className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-900"
         >
           <ChevronLeft size={16} /> Terug
         </Link>
         <div className="mt-4 flex items-center gap-3">
           <BrandWordmark className="text-2xl" />
-          <span className="text-sm text-steel-400">/ API-docs</span>
+          <span className="text-sm text-ink-500">/ API-docs</span>
         </div>
 
-        <h1 className="mt-6 text-2xl font-semibold text-steel-100">
+        <h1 className="mt-6 text-2xl font-semibold text-ink-900">
           Inbound API
         </h1>
-        <p className="mt-2 text-sm text-steel-300">
+        <p className="mt-2 text-sm text-ink-700">
           Bron-systemen sturen Jobs hierheen. Eén Job bevat één of meer
           Questions; elke Question wordt één swipe-card.
         </p>
 
         <Section title="POST /api/jobs">
-          <p className="text-sm text-steel-300">
-            Authenticatie: <code className="rounded bg-navy-800 px-1">Authorization: Bearer &lt;api-key&gt;</code>
+          <p className="text-sm text-ink-700">
+            Authenticatie:{" "}
+            <code className="rounded bg-surface px-1 ring-1 ring-line">
+              Authorization: Bearer &lt;api-key&gt;
+            </code>
           </p>
           <Code>{`POST /api/jobs
 Authorization: Bearer vondr_sk_xxxx
@@ -50,7 +53,7 @@ Content-Type: application/json
     }
   ]
 }`}</Code>
-          <p className="mt-3 text-sm text-steel-300">Response 201:</p>
+          <p className="mt-3 text-sm text-ink-700">Response 201:</p>
           <Code>{`{
   "job_id": "job-xyz",
   "url": "https://app.example/j/job-xyz"
@@ -58,10 +61,12 @@ Content-Type: application/json
         </Section>
 
         <Section title="Outbound webhook">
-          <p className="text-sm text-steel-300">
+          <p className="text-sm text-ink-700">
             Vondr POST'et bij elke beslissing naar de webhook-URL die je per
             bron-systeem hebt geregistreerd. Header{" "}
-            <code className="rounded bg-navy-800 px-1">X-Vondr-Signature</code>{" "}
+            <code className="rounded bg-surface px-1 ring-1 ring-line">
+              X-Vondr-Signature
+            </code>{" "}
             bevat een HMAC-SHA256 over de raw body.
           </p>
           <Code>{`POST <jouw-webhook-url>
@@ -81,9 +86,7 @@ Content-Type: application/json
     { "voter": "dirk@vondr.ai", "decision": "yes", "voted_at": "..." }
   ]
 }`}</Code>
-          <p className="mt-3 text-sm text-steel-300">
-            Verificatie in Node:
-          </p>
+          <p className="mt-3 text-sm text-ink-700">Verificatie in Node:</p>
           <Code>{`import { createHmac, timingSafeEqual } from "node:crypto";
 
 function verify(rawBody, secret, signatureHeader) {
@@ -96,7 +99,7 @@ function verify(rawBody, secret, signatureHeader) {
         </Section>
 
         <Section title="Approval modes">
-          <ul className="space-y-2 text-sm text-steel-200">
+          <ul className="space-y-2 text-sm text-ink-700">
             <li>
               <b>single</b> — één swipe is genoeg. Voor werkkennis (FAQ, kleine
               datakwaliteit-correcties).
@@ -131,19 +134,25 @@ function verify(rawBody, secret, signatureHeader) {
   }'`}</Code>
         </Section>
 
-        <p className="mt-8 text-center text-[11px] text-steel-400">
-          Dit is een PoC. Authenticatie, persistentie en webhooks worden in productie
-          via Supabase + Vercel Cron afgehandeld.
+        <p className="mt-8 text-center text-[11px] text-ink-400">
+          Dit is een PoC. Authenticatie, persistentie en webhooks worden in
+          productie via Supabase + Vercel Cron afgehandeld.
         </p>
       </div>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="mt-8">
-      <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-steel-300">
+      <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-ink-700">
         {title}
       </h2>
       <div className="mt-3 space-y-2">{children}</div>
@@ -153,7 +162,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Code({ children }: { children: string }) {
   return (
-    <pre className="overflow-x-auto rounded-xl bg-navy-900 p-4 text-[12px] leading-relaxed text-steel-200 ring-1 ring-navy-700">
+    <pre className="overflow-x-auto rounded-xl bg-ink-900 p-4 text-[12px] leading-relaxed text-white/90">
       <code>{children}</code>
     </pre>
   );

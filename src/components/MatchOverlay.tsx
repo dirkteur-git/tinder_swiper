@@ -6,7 +6,7 @@ import { Check } from "lucide-react";
 export function MatchOverlay({ onDismiss }: { onDismiss: () => void }) {
   return (
     <motion.div
-      className="absolute inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-[200] flex items-center justify-center"
       onClick={onDismiss}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -14,7 +14,7 @@ export function MatchOverlay({ onDismiss }: { onDismiss: () => void }) {
       transition={{ duration: 0.2 }}
     >
       <motion.div
-        className="absolute inset-0 bg-gradient-to-br from-accent-yes/90 via-navy-900/90 to-navy-950"
+        className="absolute inset-0 bg-gradient-to-br from-accent-yes/95 to-ink-900/95"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}

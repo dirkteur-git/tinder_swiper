@@ -12,11 +12,7 @@ import {
   Clock
 } from "lucide-react";
 import type { Job, Decision, Question, Vote } from "@/lib/types";
-import {
-  castVote,
-  getVotesForJob,
-  undoVote
-} from "@/lib/store";
+import { castVote, getVotesForJob, undoVote } from "@/lib/store";
 import { SwipeCard, SwipeCardHandle, SwipeDirection } from "./SwipeCard";
 import { MatchOverlay } from "./MatchOverlay";
 import { ProfileSheet } from "./ProfileSheet";
@@ -25,16 +21,28 @@ interface Props {
   job: Job;
 }
 
+function splitTitle(title: string): { topic: string; subject: string } {
+  // "Datakwaliteit — Project Westflank, fase ramen" → topic "Datakwaliteit", subject "Project Westflank, fase ramen"
+  const parts = title.split(/[—\-–]\s*/, 2);
+  if (parts.length === 2) {
+    return { topic: parts[0].trim(), subject: parts[1].trim() };
+  }
+  return { topic: "Beslissing", subject: title.trim() };
+}
+
 export function CardStack({ job }: Props) {
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
   const [stack, setStack] = useState<Question[]>([]);
-  const [history, setHistory] = useState<Array<{ q: Question; decision: Decision }>>([]);
+  const [history, setHistory] = useState<
+    Array<{ q: Question; decision: Decision }>
+  >([]);
   const [showMatch, setShowMatch] = useState(false);
   const [profileQ, setProfileQ] = useState<Question | null>(null);
   const topCardRef = useRef<SwipeCardHandle | null>(null);
 
-  // Initialize from localStorage votes
+  const { topic, subject } = useMemo(() => splitTitle(job.title), [job.title]);
+
   useEffect(() => {
     const existing: Vote[] = getVotesForJob(job.id);
     const decided = new Set(existing.map((v) => v.questionId));
@@ -50,16 +58,10 @@ export function CardStack({ job }: Props) {
   const done = total - remaining;
   const progress = total === 0 ? 0 : (done / total) * 100;
 
-  function onSwiped(dir: SwipeDirection, decision: Decision, q: Question) {
+  function onSwiped(_dir: SwipeDirection, decision: Decision, q: Question) {
     castVote(q.jobId, q.id, decision);
     setHistory((h) => [...h, { q, decision }]);
-
-    if (decision === "maybe") {
-      // "Niet ik" — terug onderaan de stapel (in PoC: gewoon weghalen, met optie undo)
-      setStack((s) => s.filter((x) => x.id !== q.id));
-    } else {
-      setStack((s) => s.filter((x) => x.id !== q.id));
-    }
+    setStack((s) => s.filter((x) => x.id !== q.id));
 
     if (decision === "yes" && job.approvalMode === "single") {
       setShowMatch(true);
@@ -81,22 +83,25 @@ export function CardStack({ job }: Props) {
   const visible = useMemo(() => stack.slice(0, 3), [stack]);
 
   return (
-    <div className="relative flex h-[100dvh] flex-col bg-navy-950">
+    <div className="relative flex h-[100dvh] flex-col bg-bg">
       {/* Header */}
-      <header className="safe-top z-30 flex items-center gap-3 px-4 pb-3">
+      <header className="safe-top z-30 flex items-center gap-3 border-b border-line bg-bg px-4 pb-3">
         <button
           onClick={() => router.push("/inbox")}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-navy-800 text-steel-200 transition active:scale-95"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-ink-700 ring-1 ring-line transition active:scale-95"
           aria-label="Terug"
         >
           <ChevronLeft size={20} />
         </button>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-steel-100">
-            {job.title}
+          <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
+            {topic}
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-steel-400">
-            <span>
+          <div className="truncate text-sm font-semibold text-ink-900">
+            {subject}
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 text-[11px] text-ink-500">
+            <span className="font-medium">
               {done} / {total}
             </span>
             {job.deadline && (
@@ -105,18 +110,18 @@ export function CardStack({ job }: Props) {
                 {formatDeadline(job.deadline)}
               </span>
             )}
-            <span className="rounded-full bg-navy-800 px-2 py-0.5 capitalize text-steel-300">
+            <span className="rounded-full bg-surface px-1.5 py-0.5 ring-1 ring-line">
               {modeLabel(job.approvalMode)}
             </span>
           </div>
         </div>
       </header>
 
-      {/* Progress bar */}
-      <div className="px-4">
-        <div className="h-1 w-full overflow-hidden rounded-full bg-navy-800">
+      {/* Voortgangsbalk */}
+      <div className="bg-bg px-4 pt-2">
+        <div className="h-1 w-full overflow-hidden rounded-full bg-line">
           <motion.div
-            className="h-full bg-steel-200"
+            className="h-full bg-ink-900"
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
             transition={{ type: "spring", stiffness: 120, damping: 20 }}
@@ -124,7 +129,7 @@ export function CardStack({ job }: Props) {
         </div>
       </div>
 
-      {/* Card area */}
+      {/* Card-area */}
       <div className="relative flex-1">
         {hydrated && remaining === 0 ? (
           <EmptyState onBack={() => router.push("/inbox")} total={total} />
@@ -135,7 +140,7 @@ export function CardStack({ job }: Props) {
                 .slice()
                 .reverse()
                 .map((q, idxFromBack) => {
-                  const stackIndex = visible.length - 1 - idxFromBack; // 0 = top
+                  const stackIndex = visible.length - 1 - idxFromBack;
                   const isTop = stackIndex === 0;
                   return (
                     <SwipeCard
@@ -143,6 +148,8 @@ export function CardStack({ job }: Props) {
                       ref={isTop ? topCardRef : undefined}
                       question={q}
                       jobTitle={job.title}
+                      topic={topic}
+                      topicSubject={subject}
                       isTop={isTop}
                       stackIndex={stackIndex}
                       onSwiped={onSwiped}
@@ -157,7 +164,7 @@ export function CardStack({ job }: Props) {
 
       {/* Action buttons */}
       {remaining > 0 && (
-        <div className="safe-bottom relative z-30 flex items-center justify-center gap-5 px-6 pb-6 pt-4">
+        <div className="safe-bottom relative z-30 flex items-center justify-center gap-5 border-t border-line bg-bg px-6 pb-6 pt-4">
           <ActionButton
             onClick={() => topCardRef.current?.swipe("left")}
             color="no"
@@ -227,18 +234,18 @@ function ActionButton({
   const sizeCls = small ? "h-12 w-12" : "h-16 w-16";
   const colorCls =
     color === "yes"
-      ? "bg-accent-yes/15 text-accent-yes ring-accent-yes/40"
+      ? "bg-white text-accent-yes ring-accent-yes/30"
       : color === "no"
-        ? "bg-accent-no/15 text-accent-no ring-accent-no/40"
+        ? "bg-white text-accent-no ring-accent-no/30"
         : color === "maybe"
-          ? "bg-accent-maybe/15 text-accent-maybe ring-accent-maybe/40"
-          : "bg-navy-800 text-steel-300 ring-steel-400/30";
+          ? "bg-white text-accent-maybe ring-accent-maybe/30"
+          : "bg-white text-ink-500 ring-line";
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className={`flex ${sizeCls} items-center justify-center rounded-full ${colorCls} ring-1 transition active:scale-90 disabled:opacity-30 disabled:active:scale-100`}
+      className={`flex ${sizeCls} items-center justify-center rounded-full ${colorCls} shadow-tile ring-1 transition active:scale-90 disabled:opacity-40 disabled:active:scale-100`}
     >
       {children}
     </button>
@@ -248,15 +255,15 @@ function ActionButton({
 function EmptyState({ onBack, total }: { onBack: () => void; total: number }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
-      <div className="text-5xl">🎉</div>
-      <h2 className="text-xl font-semibold text-steel-100">Klaar!</h2>
-      <p className="max-w-xs text-sm text-steel-300">
+      <div className="text-5xl">✓</div>
+      <h2 className="text-xl font-semibold text-ink-900">Klaar!</h2>
+      <p className="max-w-xs text-sm text-ink-500">
         Je hebt alle {total} kaarten in deze job behandeld. Het bron-systeem
         krijgt nu webhook-meldingen voor de definitieve uitkomsten.
       </p>
       <button
         onClick={onBack}
-        className="mt-2 rounded-full bg-steel-100 px-6 py-2.5 text-sm font-medium text-navy-900 transition active:scale-95"
+        className="mt-2 rounded-full bg-ink-900 px-6 py-2.5 text-sm font-medium text-white transition active:scale-95"
       >
         Terug naar inbox
       </button>

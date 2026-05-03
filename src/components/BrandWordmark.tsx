@@ -1,11 +1,10 @@
 export function BrandWordmark({ className = "" }: { className?: string }) {
-  // PoC placeholder — vervang door SVG van vondr.ai (zie README)
   return (
     <span
-      className={`inline-flex items-baseline font-black tracking-tight text-steel-100 ${className}`}
+      className={`inline-flex items-baseline font-black tracking-tight text-ink-900 ${className}`}
     >
       vondr
-      <span className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-accent-yes" />
+      <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-accent-yes" />
     </span>
   );
 }

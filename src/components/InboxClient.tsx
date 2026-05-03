@@ -42,25 +42,25 @@ export function InboxClient({ jobs }: Props) {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-navy-950">
-      <header className="safe-top sticky top-0 z-20 border-b border-navy-800 bg-navy-950/90 px-4 pb-3 backdrop-blur">
+    <div className="min-h-[100dvh] bg-bg">
+      <header className="safe-top sticky top-0 z-20 border-b border-line bg-bg/85 px-4 pb-3 backdrop-blur">
         <div className="flex items-center justify-between">
           <BrandWordmark className="text-2xl" />
           <button
             onClick={handleReset}
-            className="flex items-center gap-1.5 rounded-full bg-navy-800 px-3 py-1.5 text-[11px] text-steel-300 active:scale-95"
+            className="flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-[11px] text-ink-500 ring-1 ring-line active:scale-95"
             title="Reset (demo)"
           >
             <RotateCcw size={12} />
             reset
           </button>
         </div>
-        <div className="mt-1 flex items-baseline gap-2">
-          <h1 className="text-lg font-medium text-steel-100">
+        <div className="mt-2 flex items-baseline gap-2">
+          <h1 className="text-xl font-semibold tracking-tight text-ink-900">
             Hoi {CURRENT_USER.name}
           </h1>
           {hydrated && (
-            <span className="text-sm text-steel-400">
+            <span className="text-sm text-ink-500">
               {totalRemaining > 0
                 ? `${totalRemaining} kaart${totalRemaining === 1 ? "" : "en"} wachten`
                 : "alles afgehandeld"}
@@ -68,7 +68,7 @@ export function InboxClient({ jobs }: Props) {
           )}
         </div>
 
-        <nav className="mt-4 flex gap-1 rounded-full bg-navy-800 p-1">
+        <nav className="mt-4 flex gap-1 rounded-full bg-surface p-1 ring-1 ring-line">
           <TabButton
             active={tab === "inbox"}
             onClick={() => setTab("inbox")}
@@ -99,8 +99,8 @@ export function InboxClient({ jobs }: Props) {
             >
               {!hydrated ? (
                 <div className="space-y-3">
-                  <div className="h-32 animate-pulse rounded-2xl bg-navy-800/50" />
-                  <div className="h-32 animate-pulse rounded-2xl bg-navy-800/50" />
+                  <div className="h-32 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
+                  <div className="h-32 animate-pulse rounded-2xl bg-surface ring-1 ring-line" />
                 </div>
               ) : (
                 jobs
@@ -108,7 +108,8 @@ export function InboxClient({ jobs }: Props) {
                     const decided = new Set(
                       votes
                         .filter(
-                          (v) => v.jobId === job.id && v.userId === CURRENT_USER.id
+                          (v) =>
+                            v.jobId === job.id && v.userId === CURRENT_USER.id
                         )
                         .map((v) => v.questionId)
                     );
@@ -144,24 +145,24 @@ export function InboxClient({ jobs }: Props) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
-              className="rounded-2xl border border-dashed border-navy-700 bg-navy-900 p-6 text-center"
+              className="rounded-2xl border border-dashed border-line-strong bg-surface p-6 text-center"
             >
               <MessagesSquare
                 size={32}
-                className="mx-auto mb-3 text-steel-400"
+                className="mx-auto mb-3 text-ink-400"
               />
-              <h3 className="text-base font-medium text-steel-100">
+              <h3 className="text-base font-medium text-ink-900">
                 Nog geen besprekingen
               </h3>
-              <p className="mt-1 text-sm text-steel-300">
-                Hier komen kaarten te staan waar jij en een teamlid het
-                oneens over zijn.
+              <p className="mt-1 text-sm text-ink-500">
+                Hier komen kaarten te staan waar jij en een teamlid het oneens
+                over zijn.
               </p>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <p className="mt-8 text-center text-[11px] text-steel-400">
+        <p className="mt-8 text-center text-[11px] text-ink-400">
           Vondr · jij instrueert, AI voert uit, jij beslist
         </p>
       </main>
@@ -186,9 +187,7 @@ function TabButton({
     <button
       onClick={onClick}
       className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition ${
-        active
-          ? "bg-steel-100 text-navy-900"
-          : "text-steel-300 active:bg-navy-700"
+        active ? "bg-ink-900 text-white" : "text-ink-500 active:bg-bg"
       }`}
     >
       {icon}
@@ -196,7 +195,7 @@ function TabButton({
       {count > 0 && (
         <span
           className={`rounded-full px-1.5 text-[10px] ${
-            active ? "bg-navy-900/15 text-navy-900" : "bg-navy-700 text-steel-300"
+            active ? "bg-white/20 text-white" : "bg-bg text-ink-500"
           }`}
         >
           {count}

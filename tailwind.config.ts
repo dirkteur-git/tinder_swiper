@@ -5,29 +5,39 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        navy: {
-          950: "#0a1320",
-          900: "#0f1c2e",
-          800: "#162640",
-          700: "#1e3354"
+        bg: {
+          DEFAULT: "#f5f5f0",
+          soft: "#ffffff"
         },
-        steel: {
-          100: "#dde6f0",
-          200: "#b9cadd",
-          300: "#8faac5",
-          400: "#647ea0"
+        surface: {
+          DEFAULT: "#ffffff",
+          soft: "#fafaf6"
+        },
+        ink: {
+          900: "#0a1320",
+          800: "#0f1c2e",
+          700: "#1e3354",
+          500: "#4a5a72",
+          400: "#7989a0",
+          300: "#a8b3c4"
+        },
+        line: {
+          DEFAULT: "#e5e5dc",
+          strong: "#c8c8b8"
         },
         accent: {
-          yes: "#22c55e",
-          no: "#ef4444",
-          maybe: "#3b82f6"
+          yes: "#16a34a",
+          no: "#dc2626",
+          maybe: "#2563eb"
         }
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"]
       },
       boxShadow: {
-        card: "0 20px 40px -15px rgba(0, 0, 0, 0.5), 0 8px 16px -8px rgba(0, 0, 0, 0.3)"
+        card:
+          "0 24px 48px -16px rgba(15, 28, 46, 0.18), 0 8px 16px -8px rgba(15, 28, 46, 0.08)",
+        tile: "0 1px 2px rgba(15, 28, 46, 0.04), 0 4px 12px -4px rgba(15, 28, 46, 0.06)"
       }
     }
   },
