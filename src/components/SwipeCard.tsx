@@ -181,7 +181,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
       initial={false}
       transition={{ type: "spring", stiffness: 320, damping: 32 }}
     >
-      <div className="relative h-full w-full overflow-hidden rounded-3xl bg-surface ring-1 ring-line shadow-card no-select">
+      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-3xl bg-surface ring-1 ring-line shadow-card no-select">
         {/* drag-tinted overlay */}
         <motion.div
           className="pointer-events-none absolute inset-0 z-20 rounded-3xl"
@@ -214,21 +214,26 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
 
         {/* Topic-header — groot, vertelt direct waar dit over gaat */}
         <div className="border-b border-line bg-surface-soft px-5 pb-3 pt-5">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
               {topic}
             </span>
             <span className="rounded-full bg-bg px-2 py-0.5 text-[10px] font-medium text-ink-500 ring-1 ring-line">
               {question.externalId ?? `q-${question.position}`}
             </span>
           </div>
-          <h1 className="mt-1.5 text-2xl font-black leading-tight tracking-tight text-ink-900">
+          <h1 className="mt-1.5 text-xl font-black leading-tight tracking-tight text-ink-900">
             {topicSubject}
           </h1>
+          {question.type && (
+            <div className="mt-2 inline-flex rounded-full bg-ink-900 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+              {question.type}
+            </div>
+          )}
         </div>
 
         {/* Visual */}
-        <div className="relative h-32 w-full bg-bg">
+        <div className="relative h-28 w-full flex-shrink-0 bg-bg">
           {question.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -243,7 +248,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
         </div>
 
         {/* Content */}
-        <div className="flex h-[calc(100%-9.5rem-8rem)] flex-col gap-3 p-5">
+        <div className="flex flex-1 flex-col gap-3 overflow-hidden p-5">
           <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
             AI stelt voor
           </div>
