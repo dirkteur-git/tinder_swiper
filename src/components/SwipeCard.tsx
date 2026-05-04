@@ -10,6 +10,7 @@ import {
 import { forwardRef, useImperativeHandle, useState, useRef } from "react";
 import type { Fact, Question, Decision } from "@/lib/types";
 import { ArrowDown, X as XIcon } from "lucide-react";
+import * as haptic from "@/lib/haptic";
 
 export type SwipeDirection = "left" | "right" | "up";
 
@@ -78,14 +79,13 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
   );
 
   const [exiting, setExiting] = useState(false);
-  const haptic = useRef(false);
+  const thresholdCrossed = useRef(false);
+  const dragStarted = useRef(false);
 
   function flyAway(dir: SwipeDirection) {
     if (exiting) return;
     setExiting(true);
-    try {
-      navigator.vibrate?.(15);
-    } catch {}
+    haptic.strong();
 
     if (dir === "right") {
       animate(x, 800, { duration: 0.28, ease: [0.32, 0.72, 0, 1] });
@@ -122,6 +122,8 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
       return;
     }
 
+    // Snap-back, geen commit — geen extra buzz, alleen state resetten
+    resetGesture();
     animate(x, 0, { type: "spring", stiffness: 380, damping: 32 });
     animate(y, 0, { type: "spring", stiffness: 380, damping: 32 });
   }
@@ -129,15 +131,28 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
   function handleDrag(_e: unknown, info: PanInfo) {
     const ax = Math.abs(info.offset.x);
     const ay = Math.abs(info.offset.y);
-    const past = ax > SWIPE_THRESHOLD * 0.85 || ay > SWIPE_THRESHOLD * 0.85;
-    if (past && !haptic.current) {
-      haptic.current = true;
-      try {
-        navigator.vibrate?.(8);
-      } catch {}
-    } else if (!past) {
-      haptic.current = false;
+
+    // Pickup-tikje: één keer per drag-gesture, bij eerste merkbare beweging
+    if (!dragStarted.current && (ax > 6 || ay > 6)) {
+      dragStarted.current = true;
+      haptic.whisper();
     }
+
+    const past =
+      ax > SWIPE_THRESHOLD * 0.85 || ay > SWIPE_THRESHOLD * 0.85;
+
+    if (past && !thresholdCrossed.current) {
+      thresholdCrossed.current = true;
+      haptic.pulse();
+    } else if (!past && thresholdCrossed.current) {
+      // Teruggesleept onder de drempel — stille reset zodat heen-en-weer-buzzen voorkomen wordt
+      thresholdCrossed.current = false;
+    }
+  }
+
+  function resetGesture() {
+    dragStarted.current = false;
+    thresholdCrossed.current = false;
   }
 
   const cardZ = 10 - stackIndex;

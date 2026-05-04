@@ -2,8 +2,14 @@
 
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
+import { useEffect } from "react";
+import * as haptic from "@/lib/haptic";
 
 export function MatchOverlay({ onDismiss }: { onDismiss: () => void }) {
+  useEffect(() => {
+    haptic.success();
+  }, []);
+
   return (
     <motion.div
       className="fixed inset-0 z-[200] flex items-center justify-center"

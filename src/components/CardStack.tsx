@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { Job, Decision, Question, Vote } from "@/lib/types";
 import { castVote, getVotesForJob, undoVote } from "@/lib/store";
+import * as haptic from "@/lib/haptic";
 import { SwipeCard, SwipeCardHandle, SwipeDirection } from "./SwipeCard";
 import { MatchOverlay } from "./MatchOverlay";
 import { ProfileSheet } from "./ProfileSheet";
@@ -75,9 +76,7 @@ export function CardStack({ job }: Props) {
     undoVote(last.q.id);
     setHistory((h) => h.slice(0, -1));
     setStack((s) => [last.q, ...s]);
-    try {
-      navigator.vibrate?.(10);
-    } catch {}
+    haptic.tick();
   }
 
   const visible = useMemo(() => stack.slice(0, 3), [stack]);
