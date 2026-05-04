@@ -178,6 +178,8 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
       onDrag={handleDrag}
       onDragEnd={handleDragEnd}
       onPointerDown={(e) => {
+        // iOS Web Audio moet binnen een user gesture ontgrendeld worden
+        haptic.unlock();
         tapStartRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
       }}
       onPointerUp={(e) => {

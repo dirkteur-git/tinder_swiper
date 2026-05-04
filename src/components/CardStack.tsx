@@ -163,7 +163,10 @@ export function CardStack({ job }: Props) {
 
       {/* Action buttons */}
       {remaining > 0 && (
-        <div className="safe-bottom relative z-30 flex items-center justify-center gap-5 border-t border-line bg-bg px-6 pb-6 pt-4">
+        <div
+          className="safe-bottom relative z-30 flex items-center justify-center gap-5 border-t border-line bg-bg px-6 pb-6 pt-4"
+          onPointerDownCapture={() => haptic.unlock()}
+        >
           <ActionButton
             onClick={() => topCardRef.current?.swipe("left")}
             color="no"
