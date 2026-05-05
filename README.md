@@ -21,7 +21,7 @@ POC en swiper kennen elkaar niet. Supabase is de gedeelde postbus.
 - **Tap** op de kaart → bottom-sheet om de voorgestelde **vraag + antwoord**
   te bewerken vóór goedkeuren
 
-Magic-link login via Supabase Auth, whitelist `@vondr.ai`. Hosting op Vercel.
+Email + wachtwoord login via Supabase Auth, whitelist `@vondr.ai`. Hosting op Vercel.
 
 ## Opzetten — eerste keer
 
@@ -31,10 +31,13 @@ Magic-link login via Supabase Auth, whitelist `@vondr.ai`. Hosting op Vercel.
 2. Open **SQL Editor** → plak de inhoud van
    [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) →
    Run.
-3. **Authentication → Providers**: zet Email aan, Magic Link aan, wachtwoorden
-   uit.
+3. **Authentication → Sign In / Providers → Email**:
+   - Email auth aan (default).
+   - **"Confirm email"** UIT (anders kan niemand inloggen zonder werkende SMTP).
+   - Wachtwoord-auth aan.
 4. **Authentication → URL Configuration**: voeg je Vercel-URL toe (en
-   `http://localhost:3000` voor dev) als **Redirect URL**:
+   `http://localhost:3000` voor dev) als **Redirect URL** (alleen nodig als je
+   later magic-links/OAuth wil; voor wachtwoord-auth niet kritiek):
    - `https://<jouw-vercel>.vercel.app/auth/callback`
    - `http://localhost:3000/auth/callback`
 5. Kopieer **Project URL** + **publishable key** (Settings → API).
@@ -62,7 +65,16 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000), je wordt naar `/login`
-gestuurd, vraag magic-link aan, klik in de mail.
+gestuurd. **Eerste keer**: klik onderaan "Eerste keer? Account aanmaken →",
+vul je @vondr.ai-mail + wachtwoord in (minstens 6 tekens). Je bent direct
+ingelogd (mits "Confirm email" uit staat in Supabase, zie hierboven).
+
+Daarna: gewoon inloggen met dezelfde combinatie.
+
+### 3b. Users beheren
+
+In Supabase Studio: **Authentication → Users**. Hier kun je users handmatig
+aanmaken (Add User), wachtwoorden resetten, of accounts verwijderen.
 
 ### 4. POC koppelen
 
