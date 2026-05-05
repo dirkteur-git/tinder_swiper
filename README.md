@@ -1,175 +1,180 @@
-# Vondr — swipe-PWA
+# Vondr Swiper
 
-> Jij instrueert, AI voert uit, **jij beslist** — met één gebaar.
+Tinder-stijl PWA waar Vondr-medewerkers FAQ-kandidaten beoordelen die door de
+POC (`newMegaVondr`) zijn voorgesteld.
 
-Een Tinder-stijl Progressive Web App voor governance-beslissingen. Andere
-Vondr-systemen (NextBIM, Meeting Coach, Brein-curator) sturen *Jobs* hierheen
-via een geauthenticeerde inbound-API. Elke beslissing in de Job wordt één
-swipe-card. Gebruikers swipen rechts (ja), links (nee), of omhoog (niet ik).
-Outbound webhooks melden elke beslissing terug aan het bron-systeem.
+```
+┌─────────────┐  insert candidates    ┌──────────────┐  read candidates  ┌─────────────┐
+│  POC        │ ────────────────────► │  Supabase    │ ◄──────────────── │  Swiper     │
+│ (lokaal)    │                       │  (postgres)  │                   │  (Vercel)   │
+│             │ ◄──────────────────── │              │ ──── insert ────► │             │
+└─────────────┘  pull votes (poll)    └──────────────┘      vote         └─────────────┘
+```
 
-Het neveneffect is een ondertekende audit-trail van menselijke beslissingen —
-voor de bouw/infra-sector (TenneT, Strukton, Heijmans) waar compliance telt is
-dat het hoofdeffect.
+POC en swiper kennen elkaar niet. Supabase is de gedeelde postbus.
 
-## Status
+## Wat de swiper doet
 
-Dit is een **PoC**. Werkt volledig client-side met mock data — geen Supabase
-draait. De Supabase-migratiebestanden in [supabase/migrations](supabase/migrations/)
-zijn klaar voor gebruik wanneer je naar productie gaat.
+- **Sleep rechts** (`yes`) → POC voegt FAQ toe aan kennisbank
+- **Sleep links** (`no`) → afwijzen, geen FAQ
+- **Sleep omhoog** (`maybe`) → "later" — kaart blijft in pool
+- **Tap** op de kaart → bottom-sheet om de voorgestelde **vraag + antwoord**
+  te bewerken vóór goedkeuren
 
-## Lokaal draaien
+Magic-link login via Supabase Auth, whitelist `@vondr.ai`. Hosting op Vercel.
+
+## Opzetten — eerste keer
+
+### 1. Supabase project
+
+1. Ga naar [supabase.com](https://supabase.com), maak een project.
+2. Open **SQL Editor** → plak de inhoud van
+   [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) →
+   Run.
+3. **Authentication → Providers**: zet Email aan, Magic Link aan, wachtwoorden
+   uit.
+4. **Authentication → URL Configuration**: voeg je Vercel-URL toe (en
+   `http://localhost:3000` voor dev) als **Redirect URL**:
+   - `https://<jouw-vercel>.vercel.app/auth/callback`
+   - `http://localhost:3000/auth/callback`
+5. Kopieer **Project URL** + **publishable key** (Settings → API).
+
+### 2. Env vars
+
+Lokaal — maak `.env.local`:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx
+APP_URL=http://localhost:3000
+NEXT_PUBLIC_ALLOWED_EMAILS=dirk@vondr.ai,milan@vondr.ai
+NEXT_PUBLIC_ALLOWED_DOMAINS=vondr.ai
+```
+
+Op Vercel — zet dezelfde vars onder **Settings → Environment Variables** voor
+Production + Preview.
+
+### 3. Lokaal draaien
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Je wordt direct doorgestuurd
-naar `/inbox` en ziet twee voorbeeld-Jobs.
+Open [http://localhost:3000](http://localhost:3000), je wordt naar `/login`
+gestuurd, vraag magic-link aan, klik in de mail.
 
-Best ervaren in **mobile-emulatie** (Chrome DevTools → toggle device toolbar →
-iPhone 14 Pro). Op een echte telefoon: open het IP+poort van je dev-machine in
-Safari/Chrome en gebruik *Add to Home Screen* om als PWA te installeren.
+### 4. POC koppelen
 
-## De swipe-mechaniek
+Geef de POC drie env-vars:
 
-| Gebaar | Betekenis |
-|---|---|
-| Sleep naar rechts ▶ | Ja — accepteren |
-| Sleep naar links ◀ | Nee — afwijzen |
-| Sleep omhoog ▲ | Niet ik — door naar iemand anders |
-| Tap op de kaart | Volledige onderbouwing |
-| Tap ↶ knop | Laatste swipe ongedaan maken |
+```
+SUPABASE_URL=<zelfde URL>
+SUPABASE_SERVICE_KEY=<service_role_key — settings/api in Supabase Studio>
+```
 
-Snel flicken (snelheid > 500 px/s) telt ook als swipe — je hoeft niet ver te
-slepen.
+De **service-role key** mag nooit in deze swiper-app komen — alleen op de
+POC-side.
 
-## Project-structuur
+## Wat je leest / schrijft
+
+| Tabel | Wie schrijft | Wie leest |
+|---|---|---|
+| `swipe_candidates` | POC (service-role) | swiper (RLS: authenticated) |
+| `swipe_votes` | swiper (RLS: `auth.email() = voted_by`) | POC + swiper |
+
+Status van een kandidaat muteren = uitsluitend POC. Swiper raakt
+`swipe_candidates.status` niet aan.
+
+## Code-structuur
 
 ```
 src/
 ├── app/
-│   ├── layout.tsx          → PWA meta, viewport, font
-│   ├── page.tsx            → redirect → /inbox
-│   ├── inbox/page.tsx      → Job-overzicht (server) → InboxClient
-│   ├── j/[id]/page.tsx     → Swipe-stack voor één Job
-│   ├── docs/page.tsx       → API-documentatie
-│   └── api/
-│       ├── jobs/route.ts        → POST inbound (API-key auth)
-│       ├── jobs/[id]/route.ts   → GET single job
-│       └── votes/route.ts       → POST vote (PoC stub)
+│   ├── layout.tsx              PWA-meta + font
+│   ├── page.tsx                Stack — auth-gated, fetcht candidates server-side
+│   ├── login/page.tsx          Magic-link form
+│   ├── auth/callback/route.ts  Supabase OAuth-callback (whitelist-check)
+│   ├── auth/signout/route.ts   POST-only signout
+│   └── not-found.tsx
+├── middleware.ts               Auth-gate alle non-public routes
 ├── components/
-│   ├── SwipeCard.tsx       → De magie: framer-motion drag, rotatie, stempels
-│   ├── CardStack.tsx       → Stack-manager, undo, voortgangsbalk, counter
-│   ├── MatchOverlay.tsx    → "Match!" 1.5s animatie
-│   ├── ProfileSheet.tsx    → Tap-card → bottom-sheet met volle reden
-│   ├── JobTile.tsx
-│   ├── InboxClient.tsx
+│   ├── SwipeCard.tsx           framer-motion drag, rotatie, stempels, haptic
+│   ├── CardStack.tsx           Stack-manager, undo, voortgang, vote-flow
+│   ├── EditSheet.tsx           Bottom-sheet voor edit-before-accept
+│   ├── MatchOverlay.tsx        "Match!" 1.5s animatie bij 'yes'
 │   ├── BrandWordmark.tsx
 │   └── PwaRegister.tsx
-├── lib/
-│   ├── types.ts
-│   ├── mock-data.ts        → Twee voorbeeld-Jobs (BIM datakwaliteit + meeting feedback)
-│   ├── store.ts            → localStorage-state voor stemmen
-│   ├── schemas.ts          → zod inbound API
-│   ├── webhook-sign.ts     → HMAC-SHA256 sign + verify
-│   └── brand.ts
-└── styles/globals.css
+└── lib/
+    ├── types.ts                Candidate, Vote, Decision
+    ├── candidates.ts           fetchOpenCandidates, castVote, deleteVote
+    ├── supabase/browser.ts     getSupabase()  — voor client components
+    ├── supabase/server.ts      getSupabaseServer()  — voor server components
+    ├── auth-whitelist.ts       isAllowedEmail()
+    └── haptic.ts               Vibration API + iOS Web Audio fallback
 
 supabase/migrations/
-├── 0001_init.sql           → Schema
-├── 0002_rls.sql            → Row Level Security (verplicht aan, alle tabellen)
-├── 0003_resolve_function.sql → Trigger + state machine voor stem-resolutie
-└── 0004_seed.sql           → Eén voorbeeld-Job
+└── 0001_init.sql               Schema + RLS
 
 public/
-├── manifest.json
-├── sw.js                   → Minimale service worker
-└── icon.svg
+├── manifest.json, sw.js, icon.svg
 ```
 
-## Tinder-feel — wat er onder de motorkap zit
+## Deploy naar Vercel
 
-Zie [src/components/SwipeCard.tsx](src/components/SwipeCard.tsx).
+1. Push naar GitHub (deze repo: `dirkteur-git/tinder_swiper`).
+2. [vercel.com/new](https://vercel.com/new) → importeer.
+3. Zet env-vars (zie hierboven).
+4. **Settings → Deployment Protection**: zet Vercel Authentication uit, anders
+   krijgen Dirk + Milan een 403 voordat ze bij `/login` zijn.
+5. Voeg de production-URL toe aan Supabase **Auth → URL Configuration** als
+   Redirect URL.
 
-- **`useMotionValue`** voor x/y, geen state-updates per pixel.
-- **`useTransform`** voor rotatie (1° per ~16px horizontale drag).
-- **Stempels** ("JA"/"NEE"/"NIET IK") fade-in tied to drag-distance via `useTransform`.
-- **Spring-snapback** als drag onder threshold blijft (`stiffness: 380, damping: 32`).
-- **Velocity-trigger:** snelle flick → swipe (drempel 500 px/s) — geen volledige drag nodig.
-- **Card-stack visueel:** top + 2 daaronder met `scale: 0.96, 0.92` en `translateY` voor diepte.
-- **Haptische feedback** via `navigator.vibrate` bij confirmation (Android only).
-- **Tap vs drag:** tap = pointermove < 8px én duur < 350ms → opent profile-view.
+## Sleutelbeslissingen
 
-## Inbound API
+- **Geen FAQ-tabel hier.** POC blijft eigenaar van de kennisbank. Swiper
+  verzamelt menselijke beslissingen.
+- **Geen direct schrijven naar `swipe_candidates` vanuit browser.** Alleen
+  service-role (POC). RLS bevestigt dit.
+- **Status muteren = POC, niet swiper.** Swiper schrijft votes en wacht
+  passief.
+- **Eén row per swipe.** Niet batchen. Dubbele stemmen door dezelfde user op
+  dezelfde kaart filtert de UI client-side weg; POC neemt de laatste.
+- **Undo deletet de vote-row** (extra DELETE-policy in migratie). Anders zou
+  een per-ongeluk-no een spook-stem achterlaten.
+- **Geen AI-assist in de swiper.** AI-werk hoort in de POC. Dit is mens-werk.
 
-Zie [/docs](http://localhost:3000/docs) voor het volledige formaat.
+## Buiten v1-scope
 
-```bash
-curl -X POST http://localhost:3000/api/jobs \
-  -H "Authorization: Bearer test" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "source": "nextbim",
-    "title": "Test job",
-    "description": "Een testje",
-    "approval_mode": "single",
-    "assignees": ["dirk@vondr.ai"],
-    "questions": [
-      { "suggestion": "Doe iets", "reason": "Waarom we dit voorstellen" }
-    ]
-  }'
-```
-
-> **PoC-let op:** in deze build wordt de inbound-Job nog niet persistent
-> opgeslagen — het endpoint valideert alleen het schema. De twee zichtbare Jobs
-> in de Inbox komen uit `src/lib/mock-data.ts`. Voor productie: Supabase
-> aansluiten en de TODO-comments in `src/app/api/jobs/route.ts` uitwerken.
-
-## Outbound webhook
-
-Zie [src/lib/webhook-sign.ts](src/lib/webhook-sign.ts) en [/docs](http://localhost:3000/docs).
-
-Header: `X-Vondr-Signature: sha256=<hex>` over de raw body.
-
-Verificatie in Node:
-```js
-import { createHmac, timingSafeEqual } from "node:crypto";
-
-function verify(rawBody, secret, signatureHeader) {
-  const expected =
-    "sha256=" + createHmac("sha256", secret).update(rawBody).digest("hex");
-  const a = Buffer.from(expected);
-  const b = Buffer.from(signatureHeader);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-```
-
-## Naar productie
-
-1. **Supabase project aanmaken.** Run de 4 migraties uit `supabase/migrations/` in volgorde.
-2. **Env-vars** vullen in Vercel:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY` (server-only)
-   - `WEBHOOK_SIGNING_SECRET_FALLBACK`
-   - `APP_URL`
-3. **Auth aanzetten** — magic-link via Supabase Auth (passwordless).
-4. **Vercel deploy** (`vercel --prod`). Vercel doet HTTPS automatisch.
-5. **Brand-assets uit vondr.ai trekken:**
-   - Open `https://www.vondr.ai` in Chrome DevTools.
-   - Kopieer logo-SVG uit DOM → `public/logo.svg`, vervang `BrandWordmark.tsx`.
-   - Sample kleuren met Element-picker → `src/styles/globals.css` CSS-vars.
-   - Font-family uit `getComputedStyle(document.body).fontFamily` → vervang in `layout.tsx`.
-
-## Buiten PoC-scope
-
-- `founders_unanimous` mode (datamodel klaar, logica buiten PoC)
-- Calibration mode (kolom `is_calibration` bestaat)
-- Patroon-detectie in Bespreken
+- Realtime updates (refresh werkt prima voor 2 users)
 - Push-notificaties
-- SSO Microsoft/Outlook
-- Expertise-routing op `↑ niet ik`
-- Auditlog CSV/JSON-export
-- Rate-limiting op inbound API
+- Double approval (`requires_double` is wel in schema, logica bij POC)
+- Patroon-detectie / Bespreken-tab
+- Geavanceerde analytics
+
+## Mechaniek-details (van origineel Tinder_Swiper)
+
+| Gebaar | Decision |
+|---|---|
+| Sleep rechts (≥110px of velocity > 500 px/s) | `yes` |
+| Sleep links | `no` |
+| Sleep omhoog | `maybe` |
+| Tap (movement < 8px én duur < 350ms) | open EditSheet |
+| Knoppen ✕ ↻ ↑ ✓ | idem |
+
+Stempels "JA"/"NEE"/"LATER" faden in op basis van drag-distance.
+Multi-laagse haptic feedback (Android: Vibration API; iOS: Web Audio sub-bas
+fallback).
+
+## Test-loop met POC
+
+```
+1. POC: vink 2 FAQ-kandidaten aan, klik "Stuur naar swiper"
+   → 2 rijen in swipe_candidates (status='open')
+2. Swiper: refresh, log in met magic-link, zie 2 kaarten
+3. Swipe rechts op kaart 1, tap kaart 2 → edit antwoord → Goedkeuren
+   → 2 rijen in swipe_votes
+4. POC: klik "Sync swiper"
+   → kaart 1 → FAQ-rij aangemaakt + status='resolved'
+   → kaart 2 → FAQ-rij aangemaakt met edited_answer + status='resolved'
+```

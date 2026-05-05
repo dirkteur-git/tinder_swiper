@@ -2,7 +2,7 @@
   "name": "Vondr",
   "short_name": "Vondr",
   "description": "Vondr — beslis met één gebaar.",
-  "start_url": "/inbox",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f5f5f0",

@@ -2,81 +2,141 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { ArrowUp, Check, RotateCcw, X } from "lucide-react";
+import type { Candidate, Decision, Vote } from "@/lib/types";
 import {
-  ArrowUp,
-  Check,
-  RotateCcw,
-  X,
-  ChevronLeft,
-  Clock
-} from "lucide-react";
-import type { Job, Decision, Question, Vote } from "@/lib/types";
-import { castVote, getVotesForJob, undoVote } from "@/lib/store";
-import * as haptic from "@/lib/haptic";
+  castVote,
+  deleteVote,
+  fetchMyVotes,
+  fetchOpenCandidates
+} from "@/lib/candidates";
 import { SwipeCard, SwipeCardHandle, SwipeDirection } from "./SwipeCard";
 import { MatchOverlay } from "./MatchOverlay";
-import { ProfileSheet } from "./ProfileSheet";
+import { EditSheet } from "./EditSheet";
+import { BrandWordmark } from "./BrandWordmark";
+import * as haptic from "@/lib/haptic";
 
 interface Props {
-  job: Job;
+  userEmail: string;
 }
 
-function splitTitle(title: string): { topic: string; subject: string } {
-  // "Datakwaliteit — Project Westflank, fase ramen" → topic "Datakwaliteit", subject "Project Westflank, fase ramen"
-  const parts = title.split(/[—\-–]\s*/, 2);
-  if (parts.length === 2) {
-    return { topic: parts[0].trim(), subject: parts[1].trim() };
-  }
-  return { topic: "Beslissing", subject: title.trim() };
+interface HistoryItem {
+  candidate: Candidate;
+  voteId: string;
+  decision: Decision;
 }
 
-export function CardStack({ job }: Props) {
-  const router = useRouter();
-  const [hydrated, setHydrated] = useState(false);
-  const [stack, setStack] = useState<Question[]>([]);
-  const [history, setHistory] = useState<
-    Array<{ q: Question; decision: Decision }>
-  >([]);
+export function CardStack({ userEmail }: Props) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [stack, setStack] = useState<Candidate[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showMatch, setShowMatch] = useState(false);
-  const [profileQ, setProfileQ] = useState<Question | null>(null);
+  const [editing, setEditing] = useState<Candidate | null>(null);
   const topCardRef = useRef<SwipeCardHandle | null>(null);
+  const [totalForSession, setTotalForSession] = useState(0);
 
-  const { topic, subject } = useMemo(() => splitTitle(job.title), [job.title]);
-
+  // Load candidates + filter al-gestemde uit
   useEffect(() => {
-    const existing: Vote[] = getVotesForJob(job.id);
-    const decided = new Set(existing.map((v) => v.questionId));
-    const remaining = job.questions
-      .filter((q) => !decided.has(q.id))
-      .sort((a, b) => a.position - b.position);
-    setStack(remaining);
-    setHydrated(true);
-  }, [job.id, job.questions]);
+    let cancelled = false;
+    async function load() {
+      try {
+        const [candidates, votes] = await Promise.all([
+          fetchOpenCandidates(),
+          fetchMyVotes(userEmail)
+        ]);
+        if (cancelled) return;
+        const decided = latestDecisionPerCandidate(votes);
+        const remaining = candidates.filter(
+          (c) => !decided.has(c.id) || decided.get(c.id) === "maybe"
+        );
+        // 'maybe'-stemmen mogen weer tonen (later = blijft in stack volgens spec)
+        setStack(remaining);
+        setTotalForSession(remaining.length);
+        setLoading(false);
+      } catch (e) {
+        if (cancelled) return;
+        setError(
+          e instanceof Error ? e.message : "Kon kandidaten niet laden."
+        );
+        setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [userEmail]);
 
-  const total = job.questions.length;
   const remaining = stack.length;
-  const done = total - remaining;
-  const progress = total === 0 ? 0 : (done / total) * 100;
+  const done = totalForSession - remaining;
+  const progress =
+    totalForSession === 0 ? 100 : (done / totalForSession) * 100;
 
-  function onSwiped(_dir: SwipeDirection, decision: Decision, q: Question) {
-    castVote(q.jobId, q.id, decision);
-    setHistory((h) => [...h, { q, decision }]);
-    setStack((s) => s.filter((x) => x.id !== q.id));
-
-    if (decision === "yes" && job.approvalMode === "single") {
-      setShowMatch(true);
-      window.setTimeout(() => setShowMatch(false), 1500);
+  async function commitDecision(
+    c: Candidate,
+    decision: Decision,
+    edits?: { suggestion?: string; answer?: string }
+  ) {
+    setStack((s) => s.filter((x) => x.id !== c.id));
+    try {
+      const vote = await castVote(
+        {
+          candidateId: c.id,
+          externalId: c.externalId,
+          decision,
+          editedSuggestion: edits?.suggestion ?? null,
+          editedAnswer: edits?.answer ?? null
+        },
+        userEmail
+      );
+      setHistory((h) => [...h, { candidate: c, voteId: vote.id, decision }]);
+      if (decision === "yes") {
+        setShowMatch(true);
+        window.setTimeout(() => setShowMatch(false), 1500);
+      }
+    } catch (e) {
+      // Stem mislukt — kandidaat terugzetten en gebruiker informeren
+      setStack((s) => [c, ...s]);
+      setError(
+        e instanceof Error
+          ? `Stem niet opgeslagen: ${e.message}`
+          : "Stem niet opgeslagen."
+      );
+      window.setTimeout(() => setError(null), 4000);
     }
   }
 
-  function handleUndo() {
+  function onSwiped(_dir: SwipeDirection, decision: Decision, c: Candidate) {
+    void commitDecision(c, decision);
+  }
+
+  async function handleUndo() {
     const last = history[history.length - 1];
     if (!last) return;
-    undoVote(last.q.id);
-    setHistory((h) => h.slice(0, -1));
-    setStack((s) => [last.q, ...s]);
     haptic.tick();
+    setHistory((h) => h.slice(0, -1));
+    setStack((s) => [last.candidate, ...s]);
+    try {
+      await deleteVote(last.voteId);
+    } catch {
+      // Niet kritiek — POC neemt sowieso de laatste stem; volgende stem
+      // van deze user op deze kaart overschrijft de undone vote alsnog.
+    }
+  }
+
+  function handleEditApprove(edits: { suggestion?: string; answer?: string }) {
+    if (!editing) return;
+    const c = editing;
+    setEditing(null);
+    void commitDecision(c, "yes", edits);
+  }
+
+  function handleEditReject() {
+    if (!editing) return;
+    const c = editing;
+    setEditing(null);
+    void commitDecision(c, "no");
   }
 
   const visible = useMemo(() => stack.slice(0, 3), [stack]);
@@ -85,38 +145,31 @@ export function CardStack({ job }: Props) {
     <div className="relative flex h-[100dvh] flex-col bg-bg">
       {/* Header */}
       <header className="safe-top z-30 flex items-center gap-3 border-b border-line bg-bg px-4 pb-3">
-        <button
-          onClick={() => router.push("/inbox")}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-ink-700 ring-1 ring-line transition active:scale-95"
-          aria-label="Terug"
-        >
-          <ChevronLeft size={20} />
-        </button>
-        <div className="min-w-0 flex-1">
+        <BrandWordmark className="text-xl" />
+        <div className="min-w-0 flex-1 text-right">
           <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
-            {topic}
+            Kennisbank-curatie
           </div>
-          <div className="truncate text-sm font-semibold text-ink-900">
-            {subject}
-          </div>
-          <div className="mt-0.5 flex items-center gap-2 text-[11px] text-ink-500">
-            <span className="font-medium">
-              {done} / {total}
-            </span>
-            {job.deadline && (
-              <span className="flex items-center gap-1">
-                <Clock size={10} />
-                {formatDeadline(job.deadline)}
-              </span>
-            )}
-            <span className="rounded-full bg-surface px-1.5 py-0.5 ring-1 ring-line">
-              {modeLabel(job.approvalMode)}
-            </span>
+          <div className="text-xs text-ink-500">
+            {loading
+              ? "laden..."
+              : remaining === 0
+                ? "alles afgehandeld"
+                : `${remaining} te gaan · ${done} klaar`}
           </div>
         </div>
+        <form action="/auth/signout" method="post">
+          <button
+            type="submit"
+            className="rounded-full bg-surface px-3 py-1.5 text-[11px] text-ink-500 ring-1 ring-line active:scale-95"
+            title={userEmail}
+          >
+            uit
+          </button>
+        </form>
       </header>
 
-      {/* Voortgangsbalk */}
+      {/* Voortgang */}
       <div className="bg-bg px-4 pt-2">
         <div className="h-1 w-full overflow-hidden rounded-full bg-line">
           <motion.div
@@ -130,29 +183,30 @@ export function CardStack({ job }: Props) {
 
       {/* Card-area */}
       <div className="relative flex-1">
-        {hydrated && remaining === 0 ? (
-          <EmptyState onBack={() => router.push("/inbox")} total={total} />
+        {loading ? (
+          <Loading />
+        ) : error && stack.length === 0 ? (
+          <ErrorState message={error} />
+        ) : remaining === 0 ? (
+          <EmptyState />
         ) : (
           <div className="absolute inset-0 flex items-stretch justify-center pb-32 pt-6">
             <AnimatePresence mode="popLayout">
               {visible
                 .slice()
                 .reverse()
-                .map((q, idxFromBack) => {
+                .map((c, idxFromBack) => {
                   const stackIndex = visible.length - 1 - idxFromBack;
                   const isTop = stackIndex === 0;
                   return (
                     <SwipeCard
-                      key={q.id}
+                      key={c.id}
                       ref={isTop ? topCardRef : undefined}
-                      question={q}
-                      jobTitle={job.title}
-                      topic={topic}
-                      topicSubject={subject}
+                      candidate={c}
                       isTop={isTop}
                       stackIndex={stackIndex}
                       onSwiped={onSwiped}
-                      onTap={(qq) => setProfileQ(qq)}
+                      onTap={(cc) => setEditing(cc)}
                     />
                   );
                 })}
@@ -161,8 +215,14 @@ export function CardStack({ job }: Props) {
         )}
       </div>
 
+      {error && stack.length > 0 && (
+        <div className="absolute bottom-32 left-1/2 z-30 -translate-x-1/2 rounded-full bg-accent-no/90 px-4 py-2 text-xs text-white shadow-lg">
+          {error}
+        </div>
+      )}
+
       {/* Action buttons */}
-      {remaining > 0 && (
+      {!loading && remaining > 0 && (
         <div
           className="safe-bottom relative z-30 flex items-center justify-center gap-5 border-t border-line bg-bg px-6 pb-6 pt-4"
           onPointerDownCapture={() => haptic.unlock()}
@@ -186,7 +246,7 @@ export function CardStack({ job }: Props) {
           <ActionButton
             onClick={() => topCardRef.current?.swipe("up")}
             color="maybe"
-            label="Niet ik"
+            label="Later"
             small
           >
             <ArrowUp size={20} strokeWidth={2.5} />
@@ -206,11 +266,12 @@ export function CardStack({ job }: Props) {
       </AnimatePresence>
 
       <AnimatePresence>
-        {profileQ && (
-          <ProfileSheet
-            question={profileQ}
-            job={job}
-            onClose={() => setProfileQ(null)}
+        {editing && (
+          <EditSheet
+            candidate={editing}
+            onApprove={handleEditApprove}
+            onReject={handleEditReject}
+            onClose={() => setEditing(null)}
           />
         )}
       </AnimatePresence>
@@ -236,11 +297,11 @@ function ActionButton({
   const sizeCls = small ? "h-12 w-12" : "h-16 w-16";
   const colorCls =
     color === "yes"
-      ? "bg-white text-accent-yes ring-accent-yes/30"
+      ? "bg-white text-accent-yes ring-accent-yes/40"
       : color === "no"
-        ? "bg-white text-accent-no ring-accent-no/30"
+        ? "bg-white text-accent-no ring-accent-no/40"
         : color === "maybe"
-          ? "bg-white text-accent-maybe ring-accent-maybe/30"
+          ? "bg-white text-accent-maybe ring-accent-maybe/40"
           : "bg-white text-ink-500 ring-line";
   return (
     <button
@@ -254,39 +315,54 @@ function ActionButton({
   );
 }
 
-function EmptyState({ onBack, total }: { onBack: () => void; total: number }) {
+function Loading() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
-      <div className="text-5xl">✓</div>
-      <h2 className="text-xl font-semibold text-ink-900">Klaar!</h2>
-      <p className="max-w-xs text-sm text-ink-500">
-        Je hebt alle {total} kaarten in deze job behandeld. Het bron-systeem
-        krijgt nu webhook-meldingen voor de definitieve uitkomsten.
-      </p>
+    <div className="flex h-full items-center justify-center text-sm text-ink-400">
+      Kandidaten laden...
+    </div>
+  );
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
+      <div className="text-3xl">⚠</div>
+      <h2 className="text-base font-semibold text-ink-900">
+        Kon niet laden
+      </h2>
+      <p className="max-w-xs text-sm text-ink-500">{message}</p>
       <button
-        onClick={onBack}
-        className="mt-2 rounded-full bg-ink-900 px-6 py-2.5 text-sm font-medium text-white transition active:scale-95"
+        onClick={() => window.location.reload()}
+        className="mt-2 rounded-full bg-ink-900 px-5 py-2 text-sm font-medium text-white active:scale-95"
       >
-        Terug naar inbox
+        Opnieuw proberen
       </button>
     </div>
   );
 }
 
-function modeLabel(mode: string) {
-  if (mode === "single") return "1 stem";
-  if (mode === "double") return "2 stemmen";
-  if (mode === "founders_unanimous") return "Founders unaniem";
-  return mode;
+function EmptyState() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
+      <div className="text-4xl">✓</div>
+      <h2 className="text-xl font-semibold tracking-tight text-ink-900">
+        Klaar
+      </h2>
+      <p className="max-w-xs text-sm text-ink-500">
+        Geen kandidaten meer. De POC stuurt vanzelf nieuwe wanneer ze er zijn.
+      </p>
+    </div>
+  );
 }
 
-function formatDeadline(iso: string) {
-  const d = new Date(iso);
-  const now = Date.now();
-  const diffMs = d.getTime() - now;
-  const diffH = Math.round(diffMs / 3600000);
-  if (diffH < 0) return "verstreken";
-  if (diffH < 24) return `nog ${diffH}u`;
-  const diffD = Math.round(diffH / 24);
-  return `nog ${diffD}d`;
+/** Per kandidaat de meest recente decision pakken. */
+function latestDecisionPerCandidate(votes: Vote[]): Map<string, Decision> {
+  const byId = new Map<string, Vote>();
+  for (const v of votes) {
+    const existing = byId.get(v.candidateId);
+    if (!existing || v.votedAt > existing.votedAt) byId.set(v.candidateId, v);
+  }
+  const out = new Map<string, Decision>();
+  byId.forEach((v, id) => out.set(id, v.decision));
+  return out;
 }

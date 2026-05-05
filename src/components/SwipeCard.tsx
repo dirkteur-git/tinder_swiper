@@ -8,8 +8,7 @@ import {
   animate
 } from "framer-motion";
 import { forwardRef, useImperativeHandle, useState, useRef } from "react";
-import type { Fact, Question, Decision } from "@/lib/types";
-import { ArrowDown, X as XIcon } from "lucide-react";
+import type { Candidate, Decision } from "@/lib/types";
 import * as haptic from "@/lib/haptic";
 
 export type SwipeDirection = "left" | "right" | "up";
@@ -22,30 +21,18 @@ export interface SwipeCardHandle {
 }
 
 interface Props {
-  question: Question;
-  jobTitle: string;
-  topic: string;
-  topicSubject: string;
+  candidate: Candidate;
   isTop: boolean;
   stackIndex: number;
-  onSwiped: (dir: SwipeDirection, decision: Decision, q: Question) => void;
-  onTap: (q: Question) => void;
+  onSwiped: (dir: SwipeDirection, decision: Decision, c: Candidate) => void;
+  onTap: (c: Candidate) => void;
 }
 
 const SWIPE_THRESHOLD = 110;
 const VELOCITY_THRESHOLD = 500;
 
 export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
-  {
-    question,
-    jobTitle: _jobTitle,
-    topic,
-    topicSubject,
-    isTop,
-    stackIndex,
-    onSwiped,
-    onTap
-  },
+  { candidate, isTop, stackIndex, onSwiped, onTap },
   ref
 ) {
   const x = useMotionValue(0);
@@ -96,7 +83,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
     }
 
     window.setTimeout(() => {
-      onSwiped(dir, decisionFor(dir), question);
+      onSwiped(dir, decisionFor(dir), candidate);
     }, 250);
   }
 
@@ -122,7 +109,6 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
       return;
     }
 
-    // Snap-back, geen commit — geen extra buzz, alleen state resetten
     resetGesture();
     animate(x, 0, { type: "spring", stiffness: 380, damping: 32 });
     animate(y, 0, { type: "spring", stiffness: 380, damping: 32 });
@@ -132,7 +118,6 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
     const ax = Math.abs(info.offset.x);
     const ay = Math.abs(info.offset.y);
 
-    // Pickup-tikje: één keer per drag-gesture, bij eerste merkbare beweging
     if (!dragStarted.current && (ax > 6 || ay > 6)) {
       dragStarted.current = true;
       haptic.whisper();
@@ -145,7 +130,6 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
       thresholdCrossed.current = true;
       haptic.pulse();
     } else if (!past && thresholdCrossed.current) {
-      // Teruggesleept onder de drempel — stille reset zodat heen-en-weer-buzzen voorkomen wordt
       thresholdCrossed.current = false;
     }
   }
@@ -178,7 +162,6 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
       onDrag={handleDrag}
       onDragEnd={handleDragEnd}
       onPointerDown={(e) => {
-        // iOS Web Audio moet binnen een user gesture ontgrendeld worden
         haptic.unlock();
         tapStartRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
       }}
@@ -190,7 +173,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
         const dy = Math.abs(e.clientY - start.y);
         const dt = Date.now() - start.t;
         if (dx < 8 && dy < 8 && dt < 350) {
-          onTap(question);
+          onTap(candidate);
         }
       }}
       whileTap={isTop ? { cursor: "grabbing" } : undefined}
@@ -198,13 +181,11 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
       transition={{ type: "spring", stiffness: 320, damping: 32 }}
     >
       <div className="relative flex h-full w-full flex-col overflow-hidden rounded-3xl bg-surface ring-1 ring-line shadow-card no-select">
-        {/* drag-tinted overlay */}
         <motion.div
           className="pointer-events-none absolute inset-0 z-20 rounded-3xl"
           style={{ backgroundColor: overlayBg }}
         />
 
-        {/* Stempels — alleen op top-card */}
         {isTop && (
           <>
             <motion.div
@@ -223,265 +204,66 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
               className="pointer-events-none absolute left-1/2 top-10 z-30 -translate-x-1/2 rounded-xl border-4 border-accent-maybe bg-white/90 px-4 py-2 text-2xl font-black uppercase tracking-tight text-accent-maybe"
               style={{ opacity: maybeOpacity }}
             >
-              Niet ik
+              Later
             </motion.div>
           </>
         )}
 
-        {/* Header */}
+        {/* Header — type-badge + klant-meta */}
         <div className="flex-shrink-0 border-b border-line bg-surface-soft px-5 pb-3 pt-4">
           <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
-              {topic}
+            <span className="rounded-full bg-ink-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+              {candidate.type}
             </span>
-            <span className="rounded-full bg-bg px-2 py-0.5 text-[10px] font-medium text-ink-500 ring-1 ring-line">
-              {question.externalId ?? `q-${question.position}`}
+            <span className="truncate text-[11px] text-ink-500">
+              {candidate.klantNaam ?? "—"}
+              {candidate.meetingDatum
+                ? ` · ${formatDateShort(candidate.meetingDatum)}`
+                : ""}
             </span>
           </div>
-          <h1 className="mt-1 truncate text-base font-semibold leading-tight text-ink-700">
-            {topicSubject}
+        </div>
+
+        {/* Hero: vraag + voorgesteld antwoord + klant-quote */}
+        <div className="flex flex-1 flex-col gap-3 overflow-hidden p-5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-400">
+            Voorgestelde vraag
+          </div>
+          <h1 className="line-clamp-3 text-xl font-semibold leading-tight tracking-tight text-ink-900">
+            {candidate.suggestion}
           </h1>
-          {question.type && (
-            <div className="mt-2 inline-flex rounded-full bg-ink-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
-              {question.type}
+
+          {candidate.proposedAnswer && (
+            <div className="rounded-xl bg-accent-yes/[0.08] p-3 ring-1 ring-accent-yes/30">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent-yes">
+                Voorgesteld antwoord
+              </div>
+              <p className="mt-1 line-clamp-5 text-sm leading-snug text-ink-900">
+                {candidate.proposedAnswer}
+              </p>
+            </div>
+          )}
+
+          {candidate.klantQuote && (
+            <div className="mt-auto border-l-[3px] border-line-strong pl-3">
+              <p className="line-clamp-3 text-sm italic leading-snug text-ink-500">
+                &ldquo;{candidate.klantQuote}&rdquo;
+              </p>
             </div>
           )}
         </div>
 
-        {/* Optionele afbeelding (alleen tonen als beschikbaar) */}
-        {question.imageUrl && (
-          <div className="h-28 w-full flex-shrink-0 overflow-hidden bg-bg">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={question.imageUrl}
-              alt=""
-              className="h-full w-full object-cover"
-              draggable={false}
-            />
-          </div>
-        )}
-
-        {/* HERO — het daadwerkelijke voorstel */}
-        <div className="flex flex-1 flex-col justify-center overflow-hidden p-5">
-          <CardHero
-            facts={question.facts}
-            suggestionFallback={question.suggestion}
-          />
-        </div>
-
-        {/* Footer-hint */}
         <div className="flex-shrink-0 border-t border-line bg-surface-soft px-5 py-2.5 text-center text-[11px] text-ink-400">
-          Tik voor onderbouwing
+          Tik om te bewerken / context te zien
         </div>
       </div>
     </motion.div>
   );
 });
 
-/* ----------------------------- HERO + sub-blokken ----------------------------- */
-
-function CardHero({
-  facts,
-  suggestionFallback
-}: {
-  facts?: Fact[];
-  suggestionFallback: string;
-}) {
-  if (!facts || facts.length === 0) {
-    return <Fallback text={suggestionFallback} />;
-  }
-
-  const highlight = facts.find((f) => f.variant === "highlight");
-  const old1 = facts.find((f) => f.variant === "old");
-  const new1 = facts.find((f) => f.variant === "new");
-  const subject = facts.find((f) => !f.variant);
-
-  // Quote + voorgesteld antwoord (FAQ, objection)
-  if (highlight && new1) {
-    return (
-      <div className="flex flex-col gap-2">
-        <QuoteBlock label={highlight.label} text={highlight.value} />
-        <ArrowDivider />
-        <ProposedBlock label={new1.label} text={new1.value} />
-      </div>
-    );
-  }
-
-  // Alleen quote (quote toevoegen aan deck)
-  if (highlight) {
-    const by = facts.find((f) => f.label.toLowerCase() === "door");
-    return (
-      <QuoteBlock
-        label={highlight.label}
-        text={highlight.value}
-        attribution={by?.value}
-        big
-      />
-    );
-  }
-
-  // Van → naar (hernoemen, classificatie, value-change, doctrine, brand-confirm)
-  if (old1 && new1) {
-    return (
-      <div className="flex flex-col gap-2">
-        {subject && (
-          <SubjectLine label={subject.label} text={subject.value} />
-        )}
-        <CurrentBlock label={old1.label} text={old1.value} />
-        <ArrowDivider />
-        <ProposedBlock label={new1.label} text={new1.value} />
-      </div>
-    );
-  }
-
-  // Brandscript-bevestiging (highlight + alleen new) wordt al gepakt door bovenste case.
-  // Maar voor het geval er alleen een new is zonder old/highlight:
-  if (new1 && !old1 && !highlight) {
-    return (
-      <div className="flex flex-col gap-2">
-        {subject && (
-          <SubjectLine label={subject.label} text={subject.value} />
-        )}
-        <ProposedBlock label={new1.label} text={new1.value} big />
-      </div>
-    );
-  }
-
-  // Alleen old → verwijderen
-  if (old1) {
-    const supporting = facts
-      .filter((f) => !f.variant && f !== old1)
-      .slice(0, 2);
-    return (
-      <div className="flex flex-col gap-3">
-        <RemovalBlock label={old1.label} text={old1.value} />
-        {supporting.length > 0 && (
-          <div className="space-y-1 text-xs text-ink-500">
-            {supporting.map((f, i) => (
-              <div key={i}>
-                <span className="text-ink-400">{f.label}:</span> {f.value}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return <Fallback text={suggestionFallback} />;
-}
-
-function SubjectLine({ label, text }: { label: string; text: string }) {
-  return (
-    <div className="rounded-lg bg-bg px-3 py-1.5 ring-1 ring-line">
-      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-400">
-        {label}:
-      </span>{" "}
-      <span className="text-sm text-ink-700">{text}</span>
-    </div>
-  );
-}
-
-function QuoteBlock({
-  label,
-  text,
-  attribution,
-  big
-}: {
-  label: string;
-  text: string;
-  attribution?: string;
-  big?: boolean;
-}) {
-  return (
-    <div>
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-400">
-        {label}
-      </div>
-      <div className="mt-1.5 border-l-[3px] border-ink-900 pl-3">
-        <p
-          className={`${big ? "line-clamp-6 text-lg" : "line-clamp-4 text-base"} font-medium leading-snug text-ink-900`}
-        >
-          &ldquo;{text}&rdquo;
-        </p>
-        {attribution && (
-          <p className="mt-2 text-xs text-ink-500">— {attribution}</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function CurrentBlock({ label, text }: { label: string; text: string }) {
-  return (
-    <div className="rounded-xl bg-bg px-4 py-3 ring-1 ring-line">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-400">
-        {label}
-      </div>
-      <div className="mt-0.5 line-clamp-2 text-base leading-snug text-ink-400 line-through decoration-ink-400/60">
-        {text}
-      </div>
-    </div>
-  );
-}
-
-function ProposedBlock({
-  label,
-  text,
-  big
-}: {
-  label: string;
-  text: string;
-  big?: boolean;
-}) {
-  return (
-    <div className="rounded-xl bg-accent-yes/[0.08] px-4 py-3 ring-1 ring-accent-yes/30">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent-yes">
-        {label}
-      </div>
-      <div
-        className={`${big ? "line-clamp-5 text-base" : "line-clamp-4 text-base"} mt-0.5 font-semibold leading-snug text-ink-900`}
-      >
-        {text}
-      </div>
-    </div>
-  );
-}
-
-function RemovalBlock({ label, text }: { label: string; text: string }) {
-  return (
-    <div className="rounded-xl bg-accent-no/[0.06] px-4 py-3 ring-1 ring-accent-no/25">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent-no">
-        {label}
-      </div>
-      <div className="mt-1 flex items-start gap-2">
-        <XIcon
-          size={18}
-          strokeWidth={3}
-          className="mt-0.5 flex-shrink-0 text-accent-no"
-        />
-        <span className="line-clamp-3 text-base font-medium leading-snug text-ink-900 line-through decoration-accent-no/50">
-          {text}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function ArrowDivider() {
-  return (
-    <div className="flex items-center justify-center py-0.5 text-ink-400">
-      <ArrowDown size={20} strokeWidth={2.5} />
-    </div>
-  );
-}
-
-function Fallback({ text }: { text: string }) {
-  return (
-    <div className="flex h-full items-center justify-center">
-      <p className="text-center text-lg font-semibold leading-tight text-ink-900">
-        {text}
-      </p>
-    </div>
-  );
+function formatDateShort(iso: string): string {
+  // YYYY-MM-DD → DD-MM
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso;
+  return `${m[3]}-${m[2]}`;
 }
