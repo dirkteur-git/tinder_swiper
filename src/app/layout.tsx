@@ -1,32 +1,29 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import "@/styles/globals.css";
 import { PwaRegister } from "@/components/PwaRegister";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
-  display: "swap"
-});
-
 export const metadata: Metadata = {
-  title: "Vondr — beslis met één gebaar",
+  title: "vondr — beslis met één gebaar",
   description:
-    "Vondr swipe-PWA: AI doet de suggestie, jij beslist met één swipe. Audit-trail inclusief.",
+    "vondr swiper: AI doet de suggestie, jij beslist met één swipe. Voor de Nederlandse bouw en infra.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
-    title: "Vondr"
+    statusBarStyle: "default",
+    title: "vondr"
   },
   icons: {
-    icon: "/icon.svg",
-    apple: "/icon.svg"
+    icon: [
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" }
+    ],
+    apple: "/apple-touch-icon.png",
+    shortcut: "/favicon.ico"
   }
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f5f5f0",
+  themeColor: "#F2F5F2",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -40,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="nl" className={inter.variable}>
+    <html lang="nl">
       <body>
         {children}
         <PwaRegister />

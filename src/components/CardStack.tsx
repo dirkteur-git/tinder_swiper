@@ -1,8 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Check, RotateCcw, X } from "lucide-react";
+import Link from "next/link";
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  Clock,
+  RefreshCw,
+  RotateCcw,
+  Settings,
+  X
+} from "lucide-react";
 import type { Candidate, Decision, Vote } from "@/lib/types";
 import {
   castVote,
@@ -15,6 +25,7 @@ import { MatchOverlay } from "./MatchOverlay";
 import { EditSheet } from "./EditSheet";
 import { BrandWordmark } from "./BrandWordmark";
 import * as haptic from "@/lib/haptic";
+import { usePullToRefresh } from "@/lib/use-pull-to-refresh";
 
 interface Props {
   userEmail: string;
@@ -36,37 +47,38 @@ export function CardStack({ userEmail }: Props) {
   const topCardRef = useRef<SwipeCardHandle | null>(null);
   const [totalForSession, setTotalForSession] = useState(0);
 
-  // Load candidates + filter al-gestemde uit
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const [candidates, votes] = await Promise.all([
-          fetchOpenCandidates(),
-          fetchMyVotes(userEmail)
-        ]);
-        if (cancelled) return;
-        const decided = latestDecisionPerCandidate(votes);
-        const remaining = candidates.filter(
-          (c) => !decided.has(c.id) || decided.get(c.id) === "maybe"
-        );
-        // 'maybe'-stemmen mogen weer tonen (later = blijft in stack volgens spec)
-        setStack(remaining);
-        setTotalForSession(remaining.length);
-        setLoading(false);
-      } catch (e) {
-        if (cancelled) return;
-        setError(
-          e instanceof Error ? e.message : "Kon kandidaten niet laden."
-        );
-        setLoading(false);
-      }
+  const loadCandidates = useCallback(async () => {
+    try {
+      const [candidates, votes] = await Promise.all([
+        fetchOpenCandidates(),
+        fetchMyVotes(userEmail)
+      ]);
+      const decided = latestDecisionPerCandidate(votes);
+      const remaining = candidates.filter(
+        (c) => !decided.has(c.id) || decided.get(c.id) === "maybe"
+      );
+      setStack(remaining);
+      setTotalForSession(remaining.length);
+      setError(null);
+      setLoading(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Kon kandidaten niet laden.");
+      setLoading(false);
     }
-    load();
-    return () => {
-      cancelled = true;
-    };
   }, [userEmail]);
+
+  useEffect(() => {
+    void loadCandidates();
+  }, [loadCandidates]);
+
+  // Pull-to-refresh — negeert touches op de swipe-cards zelf
+  const ptr = usePullToRefresh({
+    onRefresh: async () => {
+      haptic.tick();
+      await loadCandidates();
+    },
+    ignoreSelector: "[data-card-drag]"
+  });
 
   const remaining = stack.length;
   const done = totalForSession - remaining;
@@ -96,7 +108,6 @@ export function CardStack({ userEmail }: Props) {
         window.setTimeout(() => setShowMatch(false), 1500);
       }
     } catch (e) {
-      // Stem mislukt — kandidaat terugzetten en gebruiker informeren
       setStack((s) => [c, ...s]);
       setError(
         e instanceof Error
@@ -120,12 +131,14 @@ export function CardStack({ userEmail }: Props) {
     try {
       await deleteVote(last.voteId);
     } catch {
-      // Niet kritiek — POC neemt sowieso de laatste stem; volgende stem
-      // van deze user op deze kaart overschrijft de undone vote alsnog.
+      /* niet kritiek — POC neemt de laatste */
     }
   }
 
-  function handleEditApprove(edits: { suggestion?: string; answer?: string }) {
+  function handleEditApprove(edits: {
+    suggestion?: string;
+    answer?: string;
+  }) {
     if (!editing) return;
     const c = editing;
     setEditing(null);
@@ -143,41 +156,66 @@ export function CardStack({ userEmail }: Props) {
 
   return (
     <div className="relative flex h-[100dvh] flex-col bg-bg">
-      {/* Header */}
-      <header className="safe-top z-30 flex items-center gap-3 border-b border-line bg-bg px-4 pb-3">
-        <BrandWordmark className="text-xl" />
-        <div className="min-w-0 flex-1 text-right">
-          <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink-400">
-            Kennisbank-curatie
-          </div>
-          <div className="text-xs text-ink-500">
+      {/* Header — vergrote safe-area zodat hij niet onder accu/notch valt */}
+      <header className="safe-top safe-x relative z-30 flex items-center gap-2 border-b border-line bg-bg/95 pb-3 backdrop-blur">
+        <BrandWordmark height={26} />
+        <div className="flex-1" />
+        <button
+          onClick={() => loadCandidates()}
+          disabled={loading || ptr.refreshing}
+          className="flex h-10 w-10 items-center justify-center rounded-full text-ink-700 transition active:scale-95 disabled:opacity-40"
+          aria-label="Vernieuwen"
+        >
+          <RefreshCw
+            size={18}
+            className={
+              loading || ptr.refreshing ? "animate-spin" : ""
+            }
+          />
+        </button>
+        <Link
+          href="/history"
+          className="flex h-10 w-10 items-center justify-center rounded-full text-ink-700 transition active:scale-95"
+          aria-label="Geschiedenis"
+        >
+          <Clock size={18} />
+        </Link>
+        <Link
+          href="/settings"
+          className="flex h-10 w-10 items-center justify-center rounded-full text-ink-700 transition active:scale-95"
+          aria-label="Instellingen"
+        >
+          <Settings size={18} />
+        </Link>
+      </header>
+
+      {/* Pull-to-refresh-indicator */}
+      <PullIndicator
+        distance={ptr.pullDistance}
+        progress={ptr.progress}
+        refreshing={ptr.refreshing}
+        armed={ptr.armed}
+      />
+
+      {/* Voortgangsbalk */}
+      <div className="bg-bg px-vondr-m pt-2">
+        <div className="h-1 w-full overflow-hidden rounded-full bg-line">
+          <motion.div
+            className="h-full bg-vondr-dark-blue"
+            initial={{ width: 0 }}
+            animate={{ width: `${progress}%` }}
+            transition={{ type: "spring", stiffness: 120, damping: 20 }}
+          />
+        </div>
+        <div className="mt-1.5 flex items-center justify-between text-[11px] text-ink-500">
+          <span>
             {loading
               ? "laden..."
               : remaining === 0
                 ? "alles afgehandeld"
                 : `${remaining} te gaan · ${done} klaar`}
-          </div>
-        </div>
-        <form action="/auth/signout" method="post">
-          <button
-            type="submit"
-            className="rounded-full bg-surface px-3 py-1.5 text-[11px] text-ink-500 ring-1 ring-line active:scale-95"
-            title={userEmail}
-          >
-            uit
-          </button>
-        </form>
-      </header>
-
-      {/* Voortgang */}
-      <div className="bg-bg px-4 pt-2">
-        <div className="h-1 w-full overflow-hidden rounded-full bg-line">
-          <motion.div
-            className="h-full bg-ink-900"
-            initial={{ width: 0 }}
-            animate={{ width: `${progress}%` }}
-            transition={{ type: "spring", stiffness: 120, damping: 20 }}
-          />
+          </span>
+          <span className="truncate text-ink-400">{userEmail}</span>
         </div>
       </div>
 
@@ -186,9 +224,9 @@ export function CardStack({ userEmail }: Props) {
         {loading ? (
           <Loading />
         ) : error && stack.length === 0 ? (
-          <ErrorState message={error} />
+          <ErrorState message={error} onRetry={loadCandidates} />
         ) : remaining === 0 ? (
-          <EmptyState />
+          <EmptyState onRefresh={loadCandidates} />
         ) : (
           <div className="absolute inset-0 flex items-stretch justify-center pb-32 pt-6">
             <AnimatePresence mode="popLayout">
@@ -221,7 +259,6 @@ export function CardStack({ userEmail }: Props) {
         </div>
       )}
 
-      {/* Action buttons */}
       {!loading && remaining > 0 && (
         <div
           className="safe-bottom relative z-30 flex items-center justify-center gap-5 border-t border-line bg-bg px-6 pb-6 pt-4"
@@ -279,6 +316,44 @@ export function CardStack({ userEmail }: Props) {
   );
 }
 
+function PullIndicator({
+  distance,
+  progress,
+  refreshing,
+  armed
+}: {
+  distance: number;
+  progress: number;
+  refreshing: boolean;
+  armed: boolean;
+}) {
+  if (distance <= 0 && !refreshing) return null;
+  return (
+    <motion.div
+      className="pointer-events-none absolute left-0 right-0 top-0 z-40 flex justify-center"
+      style={{ paddingTop: `calc(env(safe-area-inset-top) + ${distance}px)` }}
+    >
+      <div
+        className={`flex h-9 w-9 items-center justify-center rounded-full bg-surface shadow-tile ring-1 ring-line transition-colors ${
+          armed || refreshing ? "text-vondr-pop" : "text-ink-500"
+        }`}
+      >
+        {refreshing ? (
+          <RefreshCw size={16} className="animate-spin" />
+        ) : (
+          <ArrowDown
+            size={16}
+            className="transition-transform"
+            style={{
+              transform: `rotate(${Math.min(180, progress * 180)}deg)`
+            }}
+          />
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 function ActionButton({
   onClick,
   color,
@@ -323,17 +398,21 @@ function Loading() {
   );
 }
 
-function ErrorState({ message }: { message: string }) {
+function ErrorState({
+  message,
+  onRetry
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
       <div className="text-3xl">⚠</div>
-      <h2 className="text-base font-semibold text-ink-900">
-        Kon niet laden
-      </h2>
+      <h2 className="text-base font-semibold text-ink-900">Kon niet laden</h2>
       <p className="max-w-xs text-sm text-ink-500">{message}</p>
       <button
-        onClick={() => window.location.reload()}
-        className="mt-2 rounded-full bg-ink-900 px-5 py-2 text-sm font-medium text-white active:scale-95"
+        onClick={onRetry}
+        className="mt-2 rounded-full bg-vondr-dark-blue px-5 py-2 text-sm font-medium text-white active:scale-95"
       >
         Opnieuw proberen
       </button>
@@ -341,7 +420,7 @@ function ErrorState({ message }: { message: string }) {
   );
 }
 
-function EmptyState() {
+function EmptyState({ onRefresh }: { onRefresh: () => void }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
       <div className="text-4xl">✓</div>
@@ -349,13 +428,20 @@ function EmptyState() {
         Klaar
       </h2>
       <p className="max-w-xs text-sm text-ink-500">
-        Geen kandidaten meer. De POC stuurt vanzelf nieuwe wanneer ze er zijn.
+        Geen kandidaten meer. Sleep omlaag of tik op vernieuwen om te kijken
+        of de POC nieuwe heeft gestuurd.
       </p>
+      <button
+        onClick={onRefresh}
+        className="mt-2 inline-flex items-center gap-2 rounded-full bg-vondr-dark-blue px-5 py-2 text-sm font-medium text-white active:scale-95"
+      >
+        <RefreshCw size={14} />
+        Vernieuwen
+      </button>
     </div>
   );
 }
 
-/** Per kandidaat de meest recente decision pakken. */
 function latestDecisionPerCandidate(votes: Vote[]): Map<string, Decision> {
   const byId = new Map<string, Vote>();
   for (const v of votes) {

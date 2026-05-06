@@ -147,6 +147,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
 
   return (
     <motion.div
+      data-card-drag
       className="absolute inset-0 mx-auto flex max-w-md items-stretch justify-center px-4"
       style={{
         zIndex: cardZ,

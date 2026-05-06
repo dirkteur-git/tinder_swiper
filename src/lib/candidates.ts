@@ -93,6 +93,36 @@ export async function fetchMyVotes(email: string): Promise<Vote[]> {
   return (data ?? []).map((r) => rowToVote(r as VoteRow));
 }
 
+export interface VoteWithCandidate {
+  vote: Vote;
+  candidate: Candidate | null;
+}
+
+/**
+ * Fetcht jouw votes inclusief de bijbehorende candidate-rij (voor history-view).
+ * Een candidate kan inmiddels gearchiveerd of verwijderd zijn — daarom nullable.
+ */
+export async function fetchMyVotesWithCandidates(
+  email: string
+): Promise<VoteWithCandidate[]> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("swipe_votes")
+    .select("*, swipe_candidates ( * )")
+    .eq("voted_by", email)
+    .order("voted_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((row) => {
+    const r = row as VoteRow & { swipe_candidates: CandidateRow | null };
+    return {
+      vote: rowToVote(r),
+      candidate: r.swipe_candidates
+        ? rowToCandidate(r.swipe_candidates)
+        : null
+    };
+  });
+}
+
 export async function castVote(
   input: VoteInput,
   votedBy: string

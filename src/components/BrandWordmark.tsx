@@ -1,10 +1,32 @@
-export function BrandWordmark({ className = "" }: { className?: string }) {
+/* eslint-disable @next/next/no-img-element */
+
+interface Props {
+  className?: string;
+  /** Hoogte in px. Brandbook: minimaal 24px op scherm. */
+  height?: number;
+  variant?: "light" | "dark";
+}
+
+/**
+ * vondr wordmark — bron: brand-as-code v2026.Q2.
+ * Default 'light': te gebruiken op vondr.white, wit, lichtgrijs.
+ * 'dark': op vondr.dark-blue / donkere foto met effen vlak.
+ */
+export function BrandWordmark({
+  className = "",
+  height = 28,
+  variant = "light"
+}: Props) {
+  const src =
+    variant === "dark" ? "/vondr-wordmark-dark.png" : "/vondr-wordmark.png";
   return (
-    <span
-      className={`inline-flex items-baseline font-black tracking-tight text-ink-900 ${className}`}
-    >
-      vondr
-      <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-accent-yes" />
-    </span>
+    <img
+      src={src}
+      alt="vondr"
+      height={height}
+      style={{ height, width: "auto" }}
+      className={`select-none ${className}`}
+      draggable={false}
+    />
   );
 }
