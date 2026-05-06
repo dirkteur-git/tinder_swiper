@@ -1,17 +1,14 @@
 import { redirect } from "next/navigation";
 import { getSupabaseServer } from "@/lib/supabase/server";
-import { HomeClient } from "@/components/HomeClient";
+import { CardStack } from "@/components/CardStack";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
+export default async function SwipePage() {
   const supabase = getSupabaseServer();
   const {
     data: { user }
   } = await supabase.auth.getUser();
   if (!user || !user.email) redirect("/login");
-
-  const displayName = user.email.split("@")[0];
-
-  return <HomeClient userEmail={user.email} displayName={displayName} />;
+  return <CardStack userEmail={user.email} />;
 }

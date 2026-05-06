@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import {
   ArrowDown,
+  ArrowLeft,
   ArrowUp,
   Check,
   Clock,
@@ -158,7 +159,14 @@ export function CardStack({ userEmail }: Props) {
     <div className="relative flex h-[100dvh] flex-col bg-bg">
       {/* Header — vergrote safe-area zodat hij niet onder accu/notch valt */}
       <header className="safe-top safe-x relative z-30 flex items-center gap-2 border-b border-line bg-bg/95 pb-3 backdrop-blur">
-        <BrandWordmark height={26} />
+        <Link
+          href="/"
+          className="flex h-10 w-10 items-center justify-center rounded-full text-ink-700 active:scale-95"
+          aria-label="Naar home"
+        >
+          <ArrowLeft size={20} />
+        </Link>
+        <BrandWordmark height={22} />
         <div className="flex-1" />
         <button
           onClick={() => loadCandidates()}

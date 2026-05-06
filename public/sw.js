@@ -1,8 +1,8 @@
 // Vondr PWA service worker — minimaal voor PoC
 // Productie: vervang door next-pwa of workbox
 
-const CACHE = "vondr-v2";
-const SHELL = ["/", "/login"];
+const CACHE = "vondr-v3";
+const SHELL = ["/", "/swipe", "/history", "/settings", "/login"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
