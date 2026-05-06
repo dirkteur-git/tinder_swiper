@@ -8,14 +8,19 @@ interface Props {
   height?: number;
   /**
    * Variant van het logo:
-   * - 'dark' (default) — wordmark in vondr.dark-blue, voor lichte achtergrond
-   * - 'light' — wordmark in licht, voor donkere achtergrond
+   * - 'dark' (default) — donkergekleurde wordmark (vondr.dark-blue), op lichte bg
+   * - 'light' — lichtgekleurde wordmark (wit), op donkere bg
    */
   variant?: "dark" | "light";
 }
 
 /**
  * vondr wordmark — bron: brand-as-code v2026.Q2.
+ * Brandbook bestandsnamen verwijzen naar de KLEUR van de wordmark, niet
+ * naar de bedoelde achtergrond:
+ *   - vondr-wordmark-donker.png = donker gekleurd → voor lichte achtergrond
+ *   - vondr-wordmark-licht.png  = licht gekleurd  → voor donkere achtergrond
+ *
  * Tekst-fallback als de PNG faalt (offline / cache-probleem) zodat de
  * branding nooit volledig verdwijnt.
  */
@@ -24,8 +29,12 @@ export function BrandWordmark({
   height = 28,
   variant = "dark"
 }: Props) {
+  // 'dark' (donker gekleurd) → vondr-wordmark-dark.png (= donker-bestand)
+  // 'light' (licht gekleurd) → vondr-wordmark.png (= licht-bestand)
   const src =
-    variant === "light" ? "/vondr-wordmark-dark.png" : "/vondr-wordmark.png";
+    variant === "light"
+      ? "/vondr-wordmark.png"
+      : "/vondr-wordmark-dark.png";
   const [failed, setFailed] = useState(false);
 
   if (failed) {
