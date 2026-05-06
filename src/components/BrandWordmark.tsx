@@ -1,4 +1,6 @@
-/* eslint-disable @next/next/no-img-element */
+"use client";
+
+import { useState } from "react";
 
 interface Props {
   className?: string;
@@ -6,28 +8,44 @@ interface Props {
   height?: number;
   /**
    * Variant van het logo:
-   * - 'blue' (default) — babyblue wordmark, te gebruiken op vondr.white
-   * - 'dark'  — donker wordmark voor lichte achtergrond
-   * - 'light' — licht wordmark voor donkere achtergrond
+   * - 'dark' (default) — wordmark in vondr.dark-blue, voor lichte achtergrond
+   * - 'light' — wordmark in licht, voor donkere achtergrond
    */
-  variant?: "blue" | "dark" | "light";
+  variant?: "dark" | "light";
 }
 
 /**
  * vondr wordmark — bron: brand-as-code v2026.Q2.
- * Default = babyblue (`vondr-wordmark-blue.png` = vondr-logo-babyblue.png).
+ * Tekst-fallback als de PNG faalt (offline / cache-probleem) zodat de
+ * branding nooit volledig verdwijnt.
  */
 export function BrandWordmark({
   className = "",
   height = 28,
-  variant = "blue"
+  variant = "dark"
 }: Props) {
   const src =
-    variant === "light"
-      ? "/vondr-wordmark-dark.png"
-      : variant === "dark"
-        ? "/vondr-wordmark.png"
-        : "/vondr-wordmark-blue.png";
+    variant === "light" ? "/vondr-wordmark-dark.png" : "/vondr-wordmark.png";
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <span
+        className={`inline-flex items-baseline font-bold tracking-tight ${
+          variant === "light" ? "text-vondr-white" : "text-vondr-dark-blue"
+        } ${className}`}
+        style={{ fontSize: height * 0.85, lineHeight: 1 }}
+      >
+        vondr
+        <span
+          className="ml-0.5 inline-block rounded-full bg-vondr-pop"
+          style={{ width: height * 0.18, height: height * 0.18 }}
+        />
+      </span>
+    );
+  }
+
+  // eslint-disable-next-line @next/next/no-img-element
   return (
     <img
       src={src}
@@ -36,6 +54,7 @@ export function BrandWordmark({
       style={{ height, width: "auto" }}
       className={`select-none ${className}`}
       draggable={false}
+      onError={() => setFailed(true)}
     />
   );
 }
