@@ -1,14 +1,14 @@
 -- Vondr Swiper — initiële schema
 -- Run dit in Supabase Studio → SQL Editor.
 --
--- Architectuur: POC schrijft kandidaten (via service-role-key), swiper leest
--- ze + schrijft votes. POC leest votes en muteert status. Swiper raakt
+-- Architectuur: MegaVondr schrijft kandidaten (via service-role-key), swiper leest
+-- ze + schrijft votes. MegaVondr leest votes en muteert status. Swiper raakt
 -- swipe_candidates.status NIET aan.
 
 create extension if not exists "pgcrypto";
 
 -- ────────────────────────────────────────────────────────────────────
--- swipe_candidates — wat de POC erin zet
+-- swipe_candidates — wat de MegaVondr erin zet
 -- ────────────────────────────────────────────────────────────────────
 
 create table if not exists public.swipe_candidates (
@@ -69,7 +69,7 @@ create policy "auth read candidates" on public.swipe_candidates
   for select using ( auth.role() = 'authenticated' );
 
 -- Browser-clients mogen kandidaten NIET schrijven. Alleen service-role
--- (POC) kan dit, want service-role bypass't RLS automatisch. Geen extra
+-- (MegaVondr) kan dit, want service-role bypass't RLS automatisch. Geen extra
 -- policy nodig — afwezigheid = geblokkeerd.
 
 -- Ingelogde users mogen votes inserten waar voted_by = hun eigen email
@@ -83,7 +83,7 @@ create policy "auth read votes" on public.swipe_votes
   for select using ( auth.role() = 'authenticated' );
 
 -- Users mogen hun eigen votes verwijderen (voor undo).
--- Niet in originele spec maar nodig voor schone undo-UX. POC ziet
+-- Niet in originele spec maar nodig voor schone undo-UX. MegaVondr ziet
 -- daardoor geen "spook"-stem meer als gebruiker undo't.
 drop policy if exists "auth delete own vote" on public.swipe_votes;
 create policy "auth delete own vote" on public.swipe_votes

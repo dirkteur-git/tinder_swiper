@@ -3,11 +3,13 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { Check, X } from "lucide-react";
-import type { Candidate } from "@/lib/types";
+import type { Candidate, PeerVote } from "@/lib/types";
 import * as haptic from "@/lib/haptic";
 
 interface Props {
   candidate: Candidate;
+  /** In afstem-batches: voorstel van de andere reviewer dat we gebruiken als startwaarde. */
+  peerVote?: PeerVote;
   onApprove: (edits: { suggestion?: string; answer?: string }) => void;
   onReject: () => void;
   onClose: () => void;
@@ -17,10 +19,24 @@ interface Props {
  * Edit-before-accept bottom-sheet. Twee bewerkbare velden (vraag, antwoord)
  * + read-only context. Submitten schrijft een vote met edited_-velden ingevuld
  * als de tekst is gewijzigd, anders NULL (per spec).
+ *
+ * Bij afstem-batches (peerVote aanwezig met edits): startwaarde is peer's
+ * voorstel zodat de gebruiker meteen ziet waar hij op stemt en eventueel
+ * kan finetunen. "Bewerkt"-badge vergelijkt tegen de startwaarde, niet het
+ * origineel.
  */
-export function EditSheet({ candidate, onApprove, onReject, onClose }: Props) {
-  const [suggestion, setSuggestion] = useState(candidate.suggestion);
-  const [answer, setAnswer] = useState(candidate.proposedAnswer ?? "");
+export function EditSheet({
+  candidate,
+  peerVote,
+  onApprove,
+  onReject,
+  onClose
+}: Props) {
+  const baseSuggestion = peerVote?.editedSuggestion ?? candidate.suggestion;
+  const baseAnswer = peerVote?.editedAnswer ?? candidate.proposedAnswer ?? "";
+
+  const [suggestion, setSuggestion] = useState(baseSuggestion);
+  const [answer, setAnswer] = useState(baseAnswer);
 
   const sheetRef = useRef<HTMLDivElement>(null);
 
@@ -28,14 +44,19 @@ export function EditSheet({ candidate, onApprove, onReject, onClose }: Props) {
     haptic.unlock();
   }, []);
 
-  const suggestionEdited = suggestion.trim() !== candidate.suggestion.trim();
-  const answerEdited =
-    answer.trim() !== (candidate.proposedAnswer ?? "").trim();
+  const suggestionEdited = suggestion.trim() !== baseSuggestion.trim();
+  const answerEdited = answer.trim() !== baseAnswer.trim();
 
   function handleApprove() {
+    // Schrijf altijd onze versie als edit als deze afwijkt van het
+    // candidate-origineel (niet van de peer-base) — MegaVondr verwerkt dit als
+    // *jouw* finale tekst.
+    const origSuggestion = candidate.suggestion.trim();
+    const origAnswer = (candidate.proposedAnswer ?? "").trim();
     onApprove({
-      suggestion: suggestionEdited ? suggestion.trim() : undefined,
-      answer: answerEdited ? answer.trim() : undefined
+      suggestion:
+        suggestion.trim() !== origSuggestion ? suggestion.trim() : undefined,
+      answer: answer.trim() !== origAnswer ? answer.trim() : undefined
     });
   }
 
@@ -82,11 +103,29 @@ export function EditSheet({ candidate, onApprove, onReject, onClose }: Props) {
         </div>
 
         <div className="px-5 pb-6 pt-4">
+          {peerVote && (
+            <PeerBanner
+              peer={peerVote}
+              hasEditedSuggestion={
+                peerVote.editedSuggestion !== null &&
+                peerVote.editedSuggestion !== candidate.suggestion
+              }
+              hasEditedAnswer={
+                peerVote.editedAnswer !== null &&
+                peerVote.editedAnswer !== candidate.proposedAnswer
+              }
+            />
+          )}
+
           {/* Bewerkbaar: vraag */}
           <Section
             label="Vraag"
             edited={suggestionEdited}
-            hint="Bewerk vóór je goedkeurt — dit komt zo in de FAQ."
+            hint={
+              peerVote?.editedSuggestion
+                ? `Voorstel van ${peerVote.votedBy.split("@")[0]} — pas aan of laat staan.`
+                : "Bewerk vóór je goedkeurt — dit komt zo in de FAQ."
+            }
           >
             <textarea
               value={suggestion}
@@ -100,7 +139,11 @@ export function EditSheet({ candidate, onApprove, onReject, onClose }: Props) {
           <Section
             label="Antwoord"
             edited={answerEdited}
-            hint="Hoe het brein deze vraag straks beantwoordt."
+            hint={
+              peerVote?.editedAnswer
+                ? `Voorstel van ${peerVote.votedBy.split("@")[0]} — pas aan of laat staan.`
+                : "Hoe het brein deze vraag straks beantwoordt."
+            }
           >
             <textarea
               value={answer}
@@ -204,6 +247,47 @@ function Section({
       </div>
       {hint && <p className="mt-0.5 text-[11px] text-ink-400">{hint}</p>}
       <div className="mt-1.5">{children}</div>
+    </section>
+  );
+}
+
+function PeerBanner({
+  peer,
+  hasEditedSuggestion,
+  hasEditedAnswer
+}: {
+  peer: PeerVote;
+  hasEditedSuggestion: boolean;
+  hasEditedAnswer: boolean;
+}) {
+  const peerName = peer.votedBy.split("@")[0];
+  const decisionLabel =
+    peer.decision === "yes" ? "JA" : peer.decision === "no" ? "NEE" : "PAS";
+  const cls =
+    peer.decision === "yes"
+      ? "bg-accent-yes/[0.08] text-accent-yes ring-accent-yes/30"
+      : peer.decision === "no"
+        ? "bg-accent-no/[0.08] text-accent-no ring-accent-no/30"
+        : "bg-accent-maybe/[0.08] text-accent-maybe ring-accent-maybe/30";
+  return (
+    <section className="mb-4 rounded-xl bg-vondr-pop/[0.06] p-3 ring-1 ring-vondr-pop/20">
+      <div className="flex items-center gap-2 text-[11px] text-ink-700">
+        <span
+          className={`flex h-5 items-center rounded-full px-2 text-[10px] font-bold uppercase tracking-[0.14em] ring-1 ${cls}`}
+        >
+          {decisionLabel}
+        </span>
+        <span>
+          <strong className="font-semibold capitalize">{peerName}</strong> stemde
+          al
+        </span>
+      </div>
+      {(hasEditedSuggestion || hasEditedAnswer) && (
+        <p className="mt-1 text-[11px] text-ink-500">
+          De velden hieronder zijn voorgevuld met {peerName}&apos;s voorstel.
+          Pas aan of laat staan.
+        </p>
+      )}
     </section>
   );
 }

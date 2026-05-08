@@ -5,19 +5,21 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
-  ArrowUp,
-  Check,
+  CheckCircle2,
   Clock,
-  Pencil,
+  Hourglass,
+  Layers,
   RefreshCw,
-  Settings as SettingsIcon,
-  X
+  Send,
+  Settings as SettingsIcon
 } from "lucide-react";
 import {
+  fetchBatchProgress,
   fetchMyVotesWithCandidates,
-  fetchOpenCandidates,
+  fetchOpenLooseCandidates,
   type VoteWithCandidate
 } from "@/lib/candidates";
+import type { BatchProgress } from "@/lib/types";
 import { BrandWordmark } from "./BrandWordmark";
 import { usePullToRefresh } from "@/lib/use-pull-to-refresh";
 import * as haptic from "@/lib/haptic";
@@ -27,53 +29,44 @@ interface Props {
   displayName: string;
 }
 
-interface Stats {
-  open: number;
-  yes: number;
-  no: number;
-  maybe: number;
-  edited: number;
+interface MyStats {
+  contributed: number;       // committed JA-votes
+  totalCommitted: number;    // alle committed votes
+  avgResponseMs: number | null; // tijd tussen candidate-binnen en jouw stem
 }
 
 export function HomeClient({ userEmail, displayName }: Props) {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<Stats>({
-    open: 0,
-    yes: 0,
-    no: 0,
-    maybe: 0,
-    edited: 0
-  });
+  const [batches, setBatches] = useState<BatchProgress[]>([]);
+  const [looseCount, setLooseCount] = useState(0);
   const [recent, setRecent] = useState<VoteWithCandidate[]>([]);
+  const [stats, setStats] = useState<MyStats>({
+    contributed: 0,
+    totalCommitted: 0,
+    avgResponseMs: null
+  });
 
   const load = useCallback(async () => {
+    setRefreshing(true);
     try {
-      const [open, mine] = await Promise.all([
-        fetchOpenCandidates(),
+      const [progress, loose, mine] = await Promise.all([
+        fetchBatchProgress(userEmail),
+        fetchOpenLooseCandidates(),
         fetchMyVotesWithCandidates(userEmail)
       ]);
-      const counts = mine.reduce(
-        (acc, { vote }) => {
-          acc[vote.decision] = (acc[vote.decision] ?? 0) + 1;
-          if (vote.editedSuggestion || vote.editedAnswer) acc.edited++;
-          return acc;
-        },
-        { yes: 0, no: 0, maybe: 0, edited: 0 } as Record<string, number>
-      );
-      setStats({
-        open: open.length,
-        yes: counts.yes,
-        no: counts.no,
-        maybe: counts.maybe,
-        edited: counts.edited
-      });
-      setRecent(mine.slice(0, 5));
+      setBatches(progress);
+      setLooseCount(loose.length);
+      const committed = mine.filter((m) => !m.vote.isDraft);
+      setRecent(committed.slice(0, 4));
+      setStats(computeStats(committed));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kon gegevens niet laden.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [userEmail]);
 
@@ -88,21 +81,42 @@ export function HomeClient({ userEmail, displayName }: Props) {
     }
   });
 
-  const totalDone = stats.yes + stats.no + stats.maybe;
+  // Batches waar JIJ nog moet beslissen of verzenden
+  const openBatches = batches.filter(
+    (b) => !b.isFullySent && b.batch.comparedAt === null
+  );
+  // Batches waar jij klaar bent maar de cyclus nog draait —
+  // wachtend op andere reviewer of op compare-stap.
+  const inBehandeling = batches.filter(
+    (b) =>
+      b.batch.comparedAt === null &&
+      b.isFullySent &&
+      (b.awaitingPeers || b.awaitingCompare)
+  );
+  // Drafts tellen NIET als "wacht op oordeel" — die zijn al beslist,
+  // alleen nog niet verzonden. Daarom decided i.p.v. committed.
+  const totalOpenCards =
+    openBatches.reduce(
+      (acc, b) => acc + (b.totalCandidates - b.decided),
+      0
+    ) + looseCount;
   const firstName = capitalize(displayName.split(/[._-]/)[0]);
+  const contributedCount = stats.contributed;
 
   return (
     <div className="min-h-[100dvh] bg-bg pb-20">
-      {/* Minimal header */}
       <header className="safe-top safe-x relative z-30 flex items-center gap-1 pb-3">
         <BrandWordmark height={22} />
         <div className="flex-1" />
         <IconBtn
           onClick={() => void load()}
-          disabled={loading}
+          disabled={refreshing}
           label="Vernieuwen"
         >
-          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+          <RefreshCw
+            size={16}
+            className={refreshing ? "animate-spin" : ""}
+          />
         </IconBtn>
         <IconBtnLink href="/history" label="Geschiedenis">
           <Clock size={16} />
@@ -112,7 +126,6 @@ export function HomeClient({ userEmail, displayName }: Props) {
         </IconBtnLink>
       </header>
 
-      {/* Pull-to-refresh */}
       {(ptr.pullDistance > 0 || ptr.refreshing) && (
         <motion.div
           className="pointer-events-none absolute left-0 right-0 top-0 z-40 flex justify-center"
@@ -149,42 +162,15 @@ export function HomeClient({ userEmail, displayName }: Props) {
           <p className="mt-vondr-m text-base leading-relaxed text-ink-700">
             <ContributionLine
               loading={loading}
-              yes={stats.yes}
-              edited={stats.edited}
-              totalDone={totalDone}
+              contributed={contributedCount}
+              openCards={totalOpenCards}
             />
           </p>
-        </section>
 
-        {/* Primary CTA */}
-        <section className="pt-vondr-xl">
-          {stats.open > 0 ? (
-            <Link
-              href="/swipe"
-              className="group flex items-center justify-between gap-4 rounded-vondr-l bg-vondr-dark-blue px-vondr-l py-5 text-white shadow-card transition active:scale-[0.99]"
-            >
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-vondr-light-blue">
-                  Wachten op je oordeel
-                </div>
-                <div className="mt-1 text-xl font-semibold leading-tight">
-                  {stats.open}{" "}
-                  {stats.open === 1 ? "kandidaat" : "kandidaten"}
-                </div>
-              </div>
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-vondr-pop text-white">
-                <ArrowRight size={20} strokeWidth={2.4} />
-              </span>
-            </Link>
-          ) : (
-            <div className="rounded-vondr-l border border-line bg-surface px-vondr-l py-5 text-ink-500">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-400">
-                Geen open kandidaten
-              </div>
-              <p className="mt-1 text-sm">
-                Trek omlaag om te vernieuwen — of wacht tot er nieuwe binnenkomen.
-              </p>
-            </div>
+          {!loading && stats.avgResponseMs !== null && (
+            <p className="mt-vondr-s text-[11px] text-ink-400">
+              Gemiddeld reageer je binnen {formatDuration(stats.avgResponseMs)}.
+            </p>
           )}
         </section>
 
@@ -194,7 +180,75 @@ export function HomeClient({ userEmail, displayName }: Props) {
           </div>
         )}
 
-        {/* Spoor */}
+        {/* BATCHES */}
+        <section className="pt-vondr-xl">
+          <h2 className="mb-vondr-m px-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-ink-400">
+            Te beoordelen
+          </h2>
+
+          {loading && batches.length === 0 ? (
+            <div className="space-y-2">
+              <div className="h-24 animate-pulse rounded-vondr-l bg-surface ring-1 ring-line" />
+              <div className="h-24 animate-pulse rounded-vondr-l bg-surface ring-1 ring-line" />
+            </div>
+          ) : openBatches.length === 0 && looseCount === 0 ? (
+            <div className="rounded-vondr-l border border-line bg-surface px-vondr-l py-vondr-l">
+              <p className="text-sm text-ink-500">
+                Niks te beoordelen. MegaVondr stuurt vanzelf nieuwe categorieën
+                zodra er gesprekken zijn verwerkt.
+              </p>
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {openBatches.map((bp) => (
+                <li key={bp.batch.id}>
+                  <BatchTile bp={bp} />
+                </li>
+              ))}
+              {looseCount > 0 && (
+                <li>
+                  <Link
+                    href="/swipe"
+                    className="group flex items-center justify-between gap-3 rounded-vondr-l border border-dashed border-line-strong bg-surface px-vondr-l py-vondr-m text-vondr-dark-blue active:scale-[0.99]"
+                  >
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-400">
+                        Losse suggesties
+                      </div>
+                      <div className="mt-0.5 text-base font-semibold">
+                        {looseCount}{" "}
+                        {looseCount === 1 ? "suggestie" : "suggesties"} zonder
+                        categorie
+                      </div>
+                    </div>
+                    <ArrowRight
+                      size={18}
+                      className="text-ink-500 transition group-active:translate-x-0.5"
+                    />
+                  </Link>
+                </li>
+              )}
+            </ul>
+          )}
+        </section>
+
+        {/* IN BEHANDELING — door jou verzonden, wacht op anderen of compare */}
+        {inBehandeling.length > 0 && (
+          <section className="pt-vondr-xl">
+            <h2 className="mb-vondr-m px-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-ink-400">
+              In behandeling
+            </h2>
+            <ul className="space-y-2">
+              {inBehandeling.map((bp) => (
+                <li key={bp.batch.id}>
+                  <InBehandelingTile bp={bp} userEmail={userEmail} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* RECENT */}
         <section className="pt-vondr-xxl">
           <div className="flex items-baseline justify-between">
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-ink-400">
@@ -211,31 +265,31 @@ export function HomeClient({ userEmail, displayName }: Props) {
           </div>
 
           {loading ? (
-            <ul className="mt-vondr-m space-y-vondr-m">
-              {[0, 1, 2].map((i) => (
-                <li key={i} className="flex items-start gap-3">
-                  <div className="mt-1 h-3 w-3 flex-shrink-0 animate-pulse rounded-full bg-line" />
-                  <div className="flex-1 space-y-1">
-                    <div className="h-3 w-3/4 animate-pulse rounded bg-line" />
-                    <div className="h-3 w-1/3 animate-pulse rounded bg-line" />
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <div className="mt-vondr-m space-y-2">
+              <div className="h-12 animate-pulse rounded bg-line/50" />
+              <div className="h-12 animate-pulse rounded bg-line/50" />
+            </div>
           ) : recent.length === 0 ? (
             <p className="mt-vondr-m text-sm text-ink-500">
-              Nog geen spoor. Begin hierboven met swipen.
+              Nog geen verzonden beslissingen. Beoordeel een categorie en klik
+              &lsquo;verzenden&rsquo; om iets aan het geheugen toe te voegen.
             </p>
           ) : (
             <ul className="mt-vondr-m divide-y divide-line">
-              {recent.map(({ vote, candidate }) => (
+              {recent.map(({ vote, candidate, batch }) => (
                 <li
                   key={vote.id}
                   className="flex items-start gap-3 py-vondr-m"
                 >
                   <DecisionDot decision={vote.decision} />
                   <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 text-[15px] font-medium leading-snug text-vondr-dark-blue">
+                    {batch && (
+                      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-400">
+                        <Layers size={9} className="text-ink-400" />
+                        <span className="line-clamp-1">{batch.title}</span>
+                      </div>
+                    )}
+                    <p className="mt-0.5 line-clamp-2 text-[15px] font-medium leading-snug text-vondr-dark-blue">
                       {vote.editedSuggestion ||
                         candidate?.suggestion ||
                         `[${vote.externalId}]`}
@@ -246,14 +300,6 @@ export function HomeClient({ userEmail, displayName }: Props) {
                       </span>
                       {" · "}
                       {formatRelative(vote.votedAt)}
-                      {(vote.editedSuggestion || vote.editedAnswer) && (
-                        <>
-                          {" · "}
-                          <span className="inline-flex items-center gap-0.5 text-accent-maybe">
-                            <Pencil size={9} /> bewerkt
-                          </span>
-                        </>
-                      )}
                     </p>
                   </div>
                 </li>
@@ -262,7 +308,6 @@ export function HomeClient({ userEmail, displayName }: Props) {
           )}
         </section>
 
-        {/* Footer mantra */}
         <footer className="pt-vondr-xxl">
           <p className="text-[13px] italic leading-relaxed text-ink-500">
             &ldquo;Jij instrueert, AI voert uit, jij beslist.&rdquo;
@@ -276,57 +321,264 @@ export function HomeClient({ userEmail, displayName }: Props) {
 
 /* ─────────────────────────────────────────── */
 
-function ContributionLine({
-  loading,
-  yes,
-  edited,
-  totalDone
-}: {
-  loading: boolean;
-  yes: number;
-  edited: number;
-  totalDone: number;
-}) {
-  if (loading) return <span className="text-ink-400">…</span>;
+function BatchTile({ bp }: { bp: BatchProgress }) {
+  const { batch, totalCandidates, decided, drafts } = bp;
+  const isReady = bp.isComplete && drafts > 0;
+  const isFollowup = batch.isFollowup;
+  const remaining = totalCandidates - decided;
 
-  if (totalDone === 0) {
+  // Donker tile als batch klaar is om te verzenden — visueel-prominent
+  if (isReady) {
     return (
-      <>
-        Je hebt nog niets bijgedragen. Elke <b>ja</b> is een stuk kennis dat
-        morgen niemand meer hoeft op te zoeken.
-      </>
+      <Link
+        href={`/batch/${batch.id}/summary`}
+        className="group flex items-center justify-between gap-4 rounded-vondr-l bg-vondr-dark-blue px-vondr-l py-5 text-white shadow-card transition active:scale-[0.99]"
+      >
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-vondr-light-blue">
+            {isFollowup && (
+              <span className="rounded-full bg-vondr-pop/30 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.16em] text-white">
+                Afstemming
+              </span>
+            )}
+            Klaar om te verzenden
+          </div>
+          <div className="mt-1 truncate text-base font-semibold">
+            {batch.title}
+          </div>
+          <div className="mt-0.5 text-[11px] text-vondr-light-blue">
+            {decided} {decided === 1 ? "beslissing" : "beslissingen"} ·{" "}
+            {batch.klantNaam ?? "—"}
+            {batch.meetingDatum ? ` · ${formatDate(batch.meetingDatum)}` : ""}
+          </div>
+        </div>
+        <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-vondr-pop text-white">
+          <Send size={18} strokeWidth={2.4} />
+        </span>
+      </Link>
     );
   }
 
-  const yesText =
-    yes === 0
-      ? null
-      : yes === 1
-        ? "1 antwoord toegevoegd"
-        : `${yes} antwoorden toegevoegd`;
-  const editedText =
-    edited > 0
-      ? edited === 1
-        ? "1 bewerkt voordat je goedkeurde"
-        : `${edited} bewerkt voordat je goedkeurde`
-      : null;
+  const progressPct =
+    totalCandidates === 0 ? 0 : (decided / totalCandidates) * 100;
+
+  return (
+    <Link
+      href={`/batch/${batch.id}`}
+      className={`group block rounded-vondr-l px-vondr-l py-vondr-m ring-1 transition active:scale-[0.99] ${
+        isFollowup
+          ? "bg-vondr-pop/[0.04] ring-vondr-pop/25"
+          : "bg-surface ring-line"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-400">
+            {isFollowup ? (
+              <span className="rounded-full bg-vondr-pop/[0.12] px-1.5 py-0.5 text-[9px] font-bold tracking-[0.16em] text-vondr-pop">
+                Afstemming
+              </span>
+            ) : (
+              <Layers size={10} className="text-ink-400" />
+            )}
+            {batch.klantNaam ?? "—"}
+            {batch.meetingDatum && (
+              <span>· {formatDate(batch.meetingDatum)}</span>
+            )}
+          </div>
+          <h3 className="mt-1 line-clamp-2 text-base font-semibold leading-snug text-vondr-dark-blue">
+            {batch.title}
+          </h3>
+        </div>
+        <ArrowRight
+          size={18}
+          className="mt-1 flex-shrink-0 text-ink-400 transition group-active:translate-x-0.5"
+        />
+      </div>
+
+      <div className="mt-vondr-m">
+        <div className="h-1 w-full overflow-hidden rounded-full bg-line">
+          <div
+            className="h-full bg-vondr-dark-blue transition-all"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+        <div className="mt-1.5 flex items-center justify-between text-[11px] text-ink-500">
+          <span>
+            {decided === 0
+              ? `${totalCandidates} ${totalCandidates === 1 ? "suggestie" : "suggesties"} te beoordelen`
+              : remaining === 0
+                ? "alles beslist"
+                : `${remaining} te gaan · ${decided} klaar`}
+          </span>
+          {drafts > 0 && (
+            <span className="text-vondr-pop">
+              {drafts} concept
+            </span>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function InBehandelingTile({
+  bp,
+  userEmail
+}: {
+  bp: BatchProgress;
+  userEmail: string;
+}) {
+  const { batch, totalCandidates, awaitingCompare } = bp;
+  const peers = bp.reviewerProgress.filter((rp) => rp.email !== userEmail);
+
+  // Statusregel + icoon
+  let icon: React.ReactNode;
+  let statusLabel: string;
+  let statusTone: "wait" | "ready";
+  if (awaitingCompare) {
+    icon = <CheckCircle2 size={14} className="text-accent-yes" />;
+    statusLabel = "Klaar voor vergelijk";
+    statusTone = "ready";
+  } else {
+    icon = <Hourglass size={14} className="text-vondr-pop" />;
+    const waitingNames = peers
+      .filter((p) => !p.isFullySent)
+      .map((p) => capitalize(p.email.split("@")[0]));
+    statusLabel =
+      waitingNames.length === 0
+        ? "Wacht op vergelijk"
+        : `Wacht op ${waitingNames.join(" + ")}`;
+    statusTone = "wait";
+  }
+
+  return (
+    <Link
+      href={`/batch/${batch.id}/summary`}
+      className="group block rounded-vondr-l bg-surface px-vondr-l py-vondr-m ring-1 ring-line transition active:scale-[0.99]"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-400">
+            <Layers size={10} className="text-ink-400" />
+            {batch.klantNaam ?? "—"}
+            {batch.meetingDatum && (
+              <span>· {formatDate(batch.meetingDatum)}</span>
+            )}
+          </div>
+          <h3 className="mt-1 line-clamp-2 text-base font-semibold leading-snug text-vondr-dark-blue">
+            {batch.title}
+          </h3>
+        </div>
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-bg ring-1 ring-line">
+          {icon}
+        </div>
+      </div>
+
+      <div className="mt-vondr-m flex items-center justify-between gap-2 text-[11px]">
+        <span
+          className={
+            statusTone === "ready" ? "text-accent-yes" : "text-vondr-pop"
+          }
+        >
+          {statusLabel}
+        </span>
+        <span className="flex items-center gap-2 text-ink-500">
+          {bp.reviewerProgress.map((rp) => (
+            <ReviewerDot
+              key={rp.email}
+              name={
+                rp.email === userEmail
+                  ? "jij"
+                  : capitalize(rp.email.split("@")[0])
+              }
+              total={totalCandidates}
+              committed={rp.committed}
+            />
+          ))}
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+function ReviewerDot({
+  name,
+  total,
+  committed
+}: {
+  name: string;
+  total: number;
+  committed: number;
+}) {
+  const done = total > 0 && committed === total;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span
+        className={`inline-block h-2 w-2 rounded-full ${
+          done ? "bg-accent-yes" : "bg-line-strong"
+        }`}
+      />
+      <span className="lowercase">
+        {name} {committed}/{total}
+      </span>
+    </span>
+  );
+}
+
+function ContributionLine({
+  loading,
+  contributed,
+  openCards
+}: {
+  loading: boolean;
+  contributed: number;
+  openCards: number;
+}) {
+  if (loading) return <span className="text-ink-400">…</span>;
+
+  if (contributed === 0 && openCards === 0)
+    return (
+      <>
+        Niks open en nog geen bijdrage. MegaVondr stuurt nieuwe suggesties zodra
+        er gesprekken zijn verwerkt.
+      </>
+    );
+
+  if (contributed === 0)
+    return (
+      <>
+        Vondr wacht op jouw eerste bijdrage.{" "}
+        {openCards > 0 && (
+          <>
+            <b className="text-vondr-dark-blue">{openCards}</b>{" "}
+            {openCards === 1 ? "suggestie" : "suggesties"} klaar — beoordeel,{" "}
+            <b className="text-vondr-dark-blue">verzend</b>, en het systeem
+            wordt scherper.
+          </>
+        )}
+      </>
+    );
 
   return (
     <>
-      Tot nu toe:{" "}
-      {yesText && (
+      Met jouw{" "}
+      <b className="text-vondr-dark-blue">
+        {contributed} {contributed === 1 ? "beslissing" : "beslissingen"}
+      </b>{" "}
+      is vondr al rijker geworden — voor altijd vindbaar voor het hele team.
+      {openCards > 0 ? (
         <>
-          <b className="text-vondr-dark-blue">{yesText}</b>
+          {" "}
+          Maak het systeem nu{" "}
+          <b className="text-vondr-pop">{openCards}× rijker</b>:{" "}
+          {openCards === 1
+            ? "er wacht 1 suggestie"
+            : `er wachten ${openCards} suggesties`}{" "}
+          op jouw oordeel.
         </>
-      )}
-      {yesText && editedText && ", waarvan "}
-      {editedText && <b className="text-vondr-dark-blue">{editedText}</b>}
-      {(yesText || editedText) && "."}
-      {!yesText && !editedText && (
-        <>
-          <b className="text-vondr-dark-blue">{totalDone} beslissingen</b>{" "}
-          gemaakt — geen daarvan voegde toe aan het geheugen, maar elk telt.
-        </>
+      ) : (
+        <> Geen open suggesties — even pauze.</>
       )}
     </>
   );
@@ -382,17 +634,13 @@ function DecisionDot({ decision }: { decision: "yes" | "no" | "maybe" }) {
       : decision === "no"
         ? "bg-accent-no/10 text-accent-no"
         : "bg-accent-maybe/10 text-accent-maybe";
+  const Icon =
+    decision === "yes" ? "✓" : decision === "no" ? "✕" : "↑";
   return (
     <div
-      className={`mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full ${cls}`}
+      className={`mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ${cls}`}
     >
-      {decision === "yes" ? (
-        <Check size={12} strokeWidth={3} />
-      ) : decision === "no" ? (
-        <X size={12} strokeWidth={3} />
-      ) : (
-        <ArrowUp size={12} strokeWidth={3} />
-      )}
+      {Icon}
     </div>
   );
 }
@@ -402,7 +650,7 @@ function decisionLabel(d: "yes" | "no" | "maybe") {
     ? "Toegevoegd aan het geheugen"
     : d === "no"
       ? "Afgewezen"
-      : "Voor later";
+      : "Naar afstemming";
 }
 
 function decisionColor(d: "yes" | "no" | "maybe") {
@@ -416,6 +664,46 @@ function decisionColor(d: "yes" | "no" | "maybe") {
 function capitalize(s: string): string {
   if (!s) return "";
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+function computeStats(votes: VoteWithCandidate[]): MyStats {
+  let contributed = 0;
+  const deltas: number[] = [];
+  for (const { vote, candidate } of votes) {
+    if (vote.decision === "yes") contributed++;
+    if (candidate?.createdAt) {
+      const delta =
+        new Date(vote.votedAt).getTime() -
+        new Date(candidate.createdAt).getTime();
+      if (Number.isFinite(delta) && delta >= 0) deltas.push(delta);
+    }
+  }
+  const avgResponseMs =
+    deltas.length > 0
+      ? deltas.reduce((a, b) => a + b, 0) / deltas.length
+      : null;
+  return {
+    contributed,
+    totalCommitted: votes.length,
+    avgResponseMs
+  };
+}
+
+function formatDuration(ms: number): string {
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min} min`;
+  const hr = min / 60;
+  if (hr < 24) return `${hr.toFixed(hr < 10 ? 1 : 0)}u`;
+  const day = hr / 24;
+  return `${day.toFixed(day < 10 ? 1 : 0)} dagen`;
+}
+
+function formatDate(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso;
+  return `${m[3]}-${m[2]}`;
 }
 
 function formatRelative(iso: string): string {

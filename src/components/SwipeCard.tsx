@@ -8,16 +8,27 @@ import {
   animate
 } from "framer-motion";
 import { forwardRef, useImperativeHandle, useState, useRef } from "react";
-import type { Candidate, Decision } from "@/lib/types";
+import type { Candidate, Decision, PeerVote } from "@/lib/types";
 import * as haptic from "@/lib/haptic";
+import { useHandedness } from "@/lib/handedness";
 
 export type SwipeDirection = "left" | "right" | "up";
 
-const decisionFor = (dir: SwipeDirection): Decision =>
-  dir === "right" ? "yes" : dir === "left" ? "no" : "maybe";
+/** Voor linkshandig: links = JA, rechts = NEE. */
+const decisionFor = (
+  dir: SwipeDirection,
+  handedness: "right" | "left"
+): Decision => {
+  if (dir === "up") return "maybe";
+  const yesDir = handedness === "left" ? "left" : "right";
+  return dir === yesDir ? "yes" : "no";
+};
 
 export interface SwipeCardHandle {
   swipe: (dir: SwipeDirection) => void;
+  /** Trigger swipe op basis van decision — kiest zelf de juiste richting
+   *  rekening houdend met handedness. */
+  swipeDecision: (decision: Decision) => void;
 }
 
 interface Props {
@@ -26,39 +37,57 @@ interface Props {
   stackIndex: number;
   onSwiped: (dir: SwipeDirection, decision: Decision, c: Candidate) => void;
   onTap: (c: Candidate) => void;
+  /** In afstem-batches: het oordeel van de andere reviewer op het origineel. */
+  peerVote?: PeerVote;
 }
 
 const SWIPE_THRESHOLD = 110;
 const VELOCITY_THRESHOLD = 500;
 
 export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
-  { candidate, isTop, stackIndex, onSwiped, onTap },
+  { candidate, isTop, stackIndex, onSwiped, onTap, peerVote },
   ref
 ) {
+  const handedness = useHandedness();
+  const flip = handedness === "left" ? -1 : 1;
+
   const x = useMotionValue(0);
   const y = useMotionValue(0);
 
   const rotate = useTransform(x, [-300, 0, 300], [-18, 0, 18]);
 
-  const yesOpacity = useTransform(x, [40, 140], [0, 1]);
-  const noOpacity = useTransform(x, [-140, -40], [1, 0]);
+  // yesOpacity wordt zichtbaar als je in de YES-richting swipt.
+  // Voor rechtshandigen is dat positieve x; voor linkshandigen negatieve.
+  const yesOpacity = useTransform(x, (latestX) => {
+    const v = latestX * flip;
+    if (v < 40) return 0;
+    if (v > 140) return 1;
+    return (v - 40) / 100;
+  });
+  const noOpacity = useTransform(x, (latestX) => {
+    const v = latestX * flip;
+    if (v > -40) return 0;
+    if (v < -140) return 1;
+    return (-v - 40) / 100;
+  });
   const maybeOpacity = useTransform(y, [-140, -40], [1, 0]);
 
   const overlayBg = useTransform(
     [x, y] as const,
     ([latestX, latestY]: number[]) => {
+      const xFlipped = latestX * flip;
       const ax = Math.abs(latestX);
       const ay = Math.abs(latestY);
       if (latestY < -30 && ay > ax) {
         const a = Math.min(0.18, ay / 600);
         return `rgba(37, 99, 235, ${a})`;
       }
-      if (latestX > 30) {
-        const a = Math.min(0.18, latestX / 600);
+      if (xFlipped > 30) {
+        const a = Math.min(0.18, xFlipped / 600);
         return `rgba(22, 163, 74, ${a})`;
       }
-      if (latestX < -30) {
-        const a = Math.min(0.18, -latestX / 600);
+      if (xFlipped < -30) {
+        const a = Math.min(0.18, -xFlipped / 600);
         return `rgba(220, 38, 38, ${a})`;
       }
       return "rgba(0,0,0,0)";
@@ -83,11 +112,26 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
     }
 
     window.setTimeout(() => {
-      onSwiped(dir, decisionFor(dir), candidate);
+      onSwiped(dir, decisionFor(dir, handedness), candidate);
     }, 250);
   }
 
-  useImperativeHandle(ref, () => ({ swipe: flyAway }), [exiting]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      swipe: flyAway,
+      swipeDecision: (decision: Decision) => {
+        if (decision === "maybe") {
+          flyAway("up");
+          return;
+        }
+        const yesDir: SwipeDirection = handedness === "left" ? "left" : "right";
+        const noDir: SwipeDirection = handedness === "left" ? "right" : "left";
+        flyAway(decision === "yes" ? yesDir : noDir);
+      }
+    }),
+    [exiting, handedness] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   function handleDragEnd(_e: unknown, info: PanInfo) {
     const { offset, velocity } = info;
@@ -189,14 +233,24 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
 
         {isTop && (
           <>
+            {/* JA-stempel: positie afhankelijk van handedness — staat aan de
+                tegenovergestelde kant van de yes-swipe. */}
             <motion.div
-              className="pointer-events-none absolute left-6 top-8 z-30 rotate-[-14deg] rounded-xl border-4 border-accent-yes bg-white/90 px-4 py-2 text-3xl font-black uppercase tracking-tight text-accent-yes"
+              className={`pointer-events-none absolute top-8 z-30 rounded-xl border-4 border-accent-yes bg-white/90 px-4 py-2 text-3xl font-black uppercase tracking-tight text-accent-yes ${
+                handedness === "left"
+                  ? "right-6 rotate-[14deg]"
+                  : "left-6 rotate-[-14deg]"
+              }`}
               style={{ opacity: yesOpacity }}
             >
               Ja
             </motion.div>
             <motion.div
-              className="pointer-events-none absolute right-6 top-8 z-30 rotate-[14deg] rounded-xl border-4 border-accent-no bg-white/90 px-4 py-2 text-3xl font-black uppercase tracking-tight text-accent-no"
+              className={`pointer-events-none absolute top-8 z-30 rounded-xl border-4 border-accent-no bg-white/90 px-4 py-2 text-3xl font-black uppercase tracking-tight text-accent-no ${
+                handedness === "left"
+                  ? "left-6 rotate-[-14deg]"
+                  : "right-6 rotate-[14deg]"
+              }`}
               style={{ opacity: noOpacity }}
             >
               Nee
@@ -205,7 +259,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
               className="pointer-events-none absolute left-1/2 top-10 z-30 -translate-x-1/2 rounded-xl border-4 border-accent-maybe bg-white/90 px-4 py-2 text-2xl font-black uppercase tracking-tight text-accent-maybe"
               style={{ opacity: maybeOpacity }}
             >
-              Later
+              Pas
             </motion.div>
           </>
         )}
@@ -254,6 +308,8 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
           )}
         </div>
 
+        {peerVote && <PeerContext peer={peerVote} />}
+
         <div className="flex-shrink-0 border-t border-line bg-surface-soft px-5 py-2.5 text-center text-[11px] text-ink-400">
           Tik om te bewerken / context te zien
         </div>
@@ -267,4 +323,37 @@ function formatDateShort(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return iso;
   return `${m[3]}-${m[2]}`;
+}
+
+function PeerContext({ peer }: { peer: PeerVote }) {
+  const peerName = peer.votedBy.split("@")[0];
+  const decisionMeta =
+    peer.decision === "yes"
+      ? { label: "JA", cls: "bg-accent-yes/[0.10] text-accent-yes ring-accent-yes/30" }
+      : peer.decision === "no"
+        ? { label: "NEE", cls: "bg-accent-no/[0.10] text-accent-no ring-accent-no/30" }
+        : { label: "PAS", cls: "bg-accent-maybe/[0.10] text-accent-maybe ring-accent-maybe/30" };
+  const hasEdit = peer.editedSuggestion || peer.editedAnswer;
+
+  return (
+    <div className="flex-shrink-0 border-t border-line bg-vondr-pop/[0.04] px-5 py-3">
+      <div className="flex items-center gap-2">
+        <span
+          className={`flex h-5 items-center rounded-full px-2 text-[10px] font-bold uppercase tracking-[0.14em] ring-1 ${decisionMeta.cls}`}
+        >
+          {decisionMeta.label}
+        </span>
+        <span className="text-[11px] text-ink-700">
+          <strong className="font-semibold capitalize">{peerName}</strong> stemde
+          al
+        </span>
+      </div>
+      {hasEdit && (
+        <p className="mt-1.5 line-clamp-2 text-[12px] leading-snug text-ink-700">
+          <span className="text-ink-400">Voorstel: </span>
+          &ldquo;{peer.editedSuggestion ?? peer.editedAnswer}&rdquo;
+        </p>
+      )}
+    </div>
+  );
 }

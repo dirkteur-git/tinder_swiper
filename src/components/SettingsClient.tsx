@@ -5,6 +5,7 @@ import { useState } from "react";
 import {
   ArrowLeft,
   Github,
+  Hand,
   HelpCircle,
   Info,
   LogOut,
@@ -12,6 +13,7 @@ import {
   Smartphone
 } from "lucide-react";
 import { BrandWordmark } from "./BrandWordmark";
+import { useHandedness, setHandedness } from "@/lib/handedness";
 
 interface Props {
   userEmail: string;
@@ -21,6 +23,7 @@ interface Props {
 
 export function SettingsClient({ userEmail, userId, lastSignIn }: Props) {
   const [installPromptShown, setInstallPromptShown] = useState(false);
+  const handedness = useHandedness();
 
   const isStandalone =
     typeof window !== "undefined" &&
@@ -81,6 +84,46 @@ export function SettingsClient({ userEmail, userId, lastSignIn }: Props) {
               {isStandalone ? "Geïnstalleerd (PWA)" : "In browser"}
             </span>
           </Row>
+
+          <div className="border-t border-line p-3">
+            <div className="flex items-center gap-3">
+              <span className="flex-shrink-0 text-ink-400">
+                <Hand size={16} />
+              </span>
+              <div className="flex-1">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-500">
+                  Voorkeurshand
+                </div>
+                <p className="mt-0.5 text-[11px] text-ink-400">
+                  {handedness === "left"
+                    ? "Linkshandig — sleep links voor JA"
+                    : "Rechtshandig — sleep rechts voor JA"}
+                </p>
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setHandedness("right")}
+                className={`rounded-vondr-l py-2 text-sm font-semibold transition active:scale-[0.98] ${
+                  handedness === "right"
+                    ? "bg-vondr-dark-blue text-white"
+                    : "bg-bg text-ink-700 ring-1 ring-line"
+                }`}
+              >
+                Rechts → JA
+              </button>
+              <button
+                onClick={() => setHandedness("left")}
+                className={`rounded-vondr-l py-2 text-sm font-semibold transition active:scale-[0.98] ${
+                  handedness === "left"
+                    ? "bg-vondr-dark-blue text-white"
+                    : "bg-bg text-ink-700 ring-1 ring-line"
+                }`}
+              >
+                Links → JA
+              </button>
+            </div>
+          </div>
           {!isStandalone && (
             <div className="border-t border-line p-3">
               <button
@@ -108,7 +151,7 @@ export function SettingsClient({ userEmail, userId, lastSignIn }: Props) {
             icon={<Info size={16} />}
             label="Wat is dit?"
             stack
-            value="Vondr swiper is de mens-beslissings-laag voor de FAQ-curatie. POC stuurt kandidaten, jij beslist met één gebaar."
+            value="Vondr Swiper is jouw beslis-tool voor het collectieve geheugen van vondr. MegaVondr leest gesprekken uit en haalt er suggesties uit (vragen, regels, feiten, risico's). Jij en de andere founder beoordelen ze: rechts = ja (toevoegen), links = nee (afwijzen), omhoog = pas (bespreken). Suggesties zijn gegroepeerd per categorie. Pas als jullie het eens zijn over een suggestie wordt 'ie definitief opgenomen — anders gaat 'ie naar een afstem-categorie."
           />
           <Row icon={<HelpCircle size={16} />} label="Hulp">
             <a
@@ -120,12 +163,12 @@ export function SettingsClient({ userEmail, userId, lastSignIn }: Props) {
           </Row>
           <Row icon={<Github size={16} />} label="Code">
             <a
-              href="https://github.com/dirkteur-git/tinder_swiper"
+              href="https://github.com/dirkteur-git/vondr-swiper"
               target="_blank"
               rel="noreferrer"
               className="text-sm text-vondr-pop underline-offset-2 hover:underline"
             >
-              github.com/...tinder_swiper
+              github.com/...vondr-swiper
             </a>
           </Row>
         </Group>

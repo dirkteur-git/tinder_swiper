@@ -1,34 +1,35 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import {
-  ArrowDown,
   ArrowLeft,
   ArrowUp,
   Check,
-  Clock,
-  RefreshCw,
+  ListChecks,
   RotateCcw,
-  Settings,
   X
 } from "lucide-react";
-import type { Candidate, Decision, Vote } from "@/lib/types";
+import type { Candidate, Decision, PeerVote, Vote } from "@/lib/types";
 import {
   castVote,
   deleteVote,
-  fetchMyVotes,
-  fetchOpenLooseCandidates
+  fetchMyVotesForBatch,
+  fetchOpenCandidatesByBatch,
+  fetchPeerVotesForBatch
 } from "@/lib/candidates";
 import { SwipeCard, SwipeCardHandle, SwipeDirection } from "./SwipeCard";
-import { MatchOverlay } from "./MatchOverlay";
 import { EditSheet } from "./EditSheet";
-import { BrandWordmark } from "./BrandWordmark";
 import * as haptic from "@/lib/haptic";
-import { usePullToRefresh } from "@/lib/use-pull-to-refresh";
 
 interface Props {
+  batchId: string;
+  batchTitle: string;
+  klantNaam: string | null;
+  meetingDatum: string | null;
+  isFollowup: boolean;
   userEmail: string;
 }
 
@@ -38,53 +39,69 @@ interface HistoryItem {
   decision: Decision;
 }
 
-export function CardStack({ userEmail }: Props) {
+export function BatchStackClient({
+  batchId,
+  batchTitle,
+  klantNaam,
+  meetingDatum,
+  isFollowup,
+  userEmail
+}: Props) {
+  const router = useRouter();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [allCandidates, setAllCandidates] = useState<Candidate[]>([]);
   const [stack, setStack] = useState<Candidate[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [showMatch, setShowMatch] = useState(false);
   const [editing, setEditing] = useState<Candidate | null>(null);
+  const [peerByCandidate, setPeerByCandidate] = useState<
+    Map<string, PeerVote>
+  >(new Map());
   const topCardRef = useRef<SwipeCardHandle | null>(null);
-  const [totalForSession, setTotalForSession] = useState(0);
 
-  const loadCandidates = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      const [candidates, votes] = await Promise.all([
-        fetchOpenLooseCandidates(),
-        fetchMyVotes(userEmail)
+      const [cands, votes, peers] = await Promise.all([
+        fetchOpenCandidatesByBatch(batchId),
+        fetchMyVotesForBatch(batchId, userEmail),
+        isFollowup
+          ? fetchPeerVotesForBatch(batchId, userEmail)
+          : Promise.resolve([] as PeerVote[])
       ]);
       const decided = latestDecisionPerCandidate(votes);
-      const remaining = candidates.filter(
+      const remaining = cands.filter(
         (c) => !decided.has(c.id) || decided.get(c.id) === "maybe"
       );
+      const peerMap = new Map<string, PeerVote>();
+      for (const p of peers) peerMap.set(p.candidateId, p);
+      setAllCandidates(cands);
       setStack(remaining);
-      setTotalForSession(remaining.length);
+      setPeerByCandidate(peerMap);
       setError(null);
       setLoading(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Kon suggesties niet laden.");
+      setError(e instanceof Error ? e.message : "Kon categorie niet laden.");
       setLoading(false);
     }
-  }, [userEmail]);
+  }, [batchId, userEmail, isFollowup]);
 
   useEffect(() => {
-    void loadCandidates();
-  }, [loadCandidates]);
+    void load();
+  }, [load]);
 
-  // Pull-to-refresh — negeert touches op de swipe-cards zelf
-  const ptr = usePullToRefresh({
-    onRefresh: async () => {
-      haptic.tick();
-      await loadCandidates();
-    },
-    ignoreSelector: "[data-card-drag]"
-  });
+  // Bij aankomst: als alle kaarten al beslist zijn (gebruiker komt
+  // bijvoorbeeld terug via deeplink), stuur direct door naar summary.
+  useEffect(() => {
+    if (!loading && stack.length === 0 && allCandidates.length > 0) {
+      router.replace(`/batch/${batchId}/summary`);
+    }
+  }, [loading, stack.length, allCandidates.length, batchId, router]);
 
+  const total = allCandidates.length;
   const remaining = stack.length;
-  const done = totalForSession - remaining;
-  const progress =
-    totalForSession === 0 ? 100 : (done / totalForSession) * 100;
+  const done = total - remaining;
+  const progress = total === 0 ? 0 : (done / total) * 100;
 
   async function commitDecision(
     c: Candidate,
@@ -99,14 +116,20 @@ export function CardStack({ userEmail }: Props) {
           externalId: c.externalId,
           decision,
           editedSuggestion: edits?.suggestion ?? null,
-          editedAnswer: edits?.answer ?? null
+          editedAnswer: edits?.answer ?? null,
+          isDraft: true // ← batch-flow: draft tot 'verzenden' op summary
         },
         userEmail
       );
       setHistory((h) => [...h, { candidate: c, voteId: vote.id, decision }]);
-      if (decision === "yes") {
-        setShowMatch(true);
-        window.setTimeout(() => setShowMatch(false), 1500);
+
+      // Laatste kaart? Stuur naar summary.
+      const nextRemaining = stack.length - 1;
+      if (nextRemaining <= 0) {
+        haptic.success();
+        window.setTimeout(() => {
+          router.push(`/batch/${batchId}/summary`);
+        }, 350);
       }
     } catch (e) {
       setStack((s) => [c, ...s]);
@@ -132,7 +155,7 @@ export function CardStack({ userEmail }: Props) {
     try {
       await deleteVote(last.voteId);
     } catch {
-      /* niet kritiek — MegaVondr neemt de laatste */
+      /* niet kritiek */
     }
   }
 
@@ -157,55 +180,40 @@ export function CardStack({ userEmail }: Props) {
 
   return (
     <div className="relative flex h-[100dvh] flex-col bg-bg">
-      {/* Header — vergrote safe-area zodat hij niet onder accu/notch valt */}
       <header className="safe-top safe-x relative z-30 flex items-center gap-2 border-b border-line bg-bg/95 pb-3 backdrop-blur">
         <Link
           href="/"
           className="flex h-10 w-10 items-center justify-center rounded-full text-ink-700 active:scale-95"
-          aria-label="Naar home"
+          aria-label="Terug"
         >
           <ArrowLeft size={20} />
         </Link>
-        <BrandWordmark height={22} />
-        <div className="flex-1" />
-        <button
-          onClick={() => loadCandidates()}
-          disabled={loading || ptr.refreshing}
-          className="flex h-10 w-10 items-center justify-center rounded-full text-ink-700 transition active:scale-95 disabled:opacity-40"
-          aria-label="Vernieuwen"
-        >
-          <RefreshCw
-            size={18}
-            className={
-              loading || ptr.refreshing ? "animate-spin" : ""
-            }
-          />
-        </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-ink-400">
+            {isFollowup && (
+              <span className="rounded-full bg-vondr-pop/[0.12] px-1.5 py-0.5 text-[9px] font-bold tracking-[0.16em] text-vondr-pop">
+                Afstemming
+              </span>
+            )}
+            <span className="truncate">
+              {klantNaam ?? "—"}
+              {meetingDatum ? ` · ${formatDate(meetingDatum)}` : ""}
+            </span>
+          </div>
+          <h1 className="truncate text-sm font-semibold text-vondr-dark-blue">
+            {batchTitle}
+          </h1>
+        </div>
         <Link
-          href="/history"
-          className="flex h-10 w-10 items-center justify-center rounded-full text-ink-700 transition active:scale-95"
-          aria-label="Geschiedenis"
+          href={`/batch/${batchId}/summary`}
+          className="flex h-10 w-10 items-center justify-center rounded-full text-ink-700 active:scale-95"
+          aria-label="Samenvatting"
+          title="Samenvatting"
         >
-          <Clock size={18} />
-        </Link>
-        <Link
-          href="/settings"
-          className="flex h-10 w-10 items-center justify-center rounded-full text-ink-700 transition active:scale-95"
-          aria-label="Instellingen"
-        >
-          <Settings size={18} />
+          <ListChecks size={18} />
         </Link>
       </header>
 
-      {/* Pull-to-refresh-indicator */}
-      <PullIndicator
-        distance={ptr.pullDistance}
-        progress={ptr.progress}
-        refreshing={ptr.refreshing}
-        armed={ptr.armed}
-      />
-
-      {/* Voortgangsbalk */}
       <div className="bg-bg px-vondr-m pt-2">
         <div className="h-1 w-full overflow-hidden rounded-full bg-line">
           <motion.div
@@ -220,21 +228,33 @@ export function CardStack({ userEmail }: Props) {
             {loading
               ? "laden..."
               : remaining === 0
-                ? "alles afgehandeld"
+                ? "alles beslist — door naar samenvatting"
                 : `${remaining} te gaan · ${done} klaar`}
           </span>
-          <span className="truncate text-ink-400">{userEmail}</span>
+          <span className="text-ink-400">{total} totaal</span>
         </div>
       </div>
 
-      {/* Card-area */}
       <div className="relative flex-1">
         {loading ? (
-          <Loading />
+          <div className="flex h-full items-center justify-center text-sm text-ink-400">
+            Categorie laden...
+          </div>
         ) : error && stack.length === 0 ? (
-          <ErrorState message={error} onRetry={loadCandidates} />
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
+            <div className="text-3xl">⚠</div>
+            <p className="text-sm text-ink-500">{error}</p>
+            <Link
+              href="/"
+              className="mt-2 rounded-full bg-vondr-dark-blue px-5 py-2 text-sm font-medium text-white"
+            >
+              Terug
+            </Link>
+          </div>
         ) : remaining === 0 ? (
-          <EmptyState onRefresh={loadCandidates} />
+          <div className="flex h-full items-center justify-center text-sm text-ink-400">
+            Door naar samenvatting...
+          </div>
         ) : (
           <div className="absolute inset-0 flex items-stretch justify-center pb-32 pt-6">
             <AnimatePresence mode="popLayout">
@@ -253,6 +273,7 @@ export function CardStack({ userEmail }: Props) {
                       stackIndex={stackIndex}
                       onSwiped={onSwiped}
                       onTap={(cc) => setEditing(cc)}
+                      peerVote={peerByCandidate.get(c.id)}
                     />
                   );
                 })}
@@ -307,13 +328,10 @@ export function CardStack({ userEmail }: Props) {
       )}
 
       <AnimatePresence>
-        {showMatch && <MatchOverlay onDismiss={() => setShowMatch(false)} />}
-      </AnimatePresence>
-
-      <AnimatePresence>
         {editing && (
           <EditSheet
             candidate={editing}
+            peerVote={peerByCandidate.get(editing.id)}
             onApprove={handleEditApprove}
             onReject={handleEditReject}
             onClose={() => setEditing(null)}
@@ -321,44 +339,6 @@ export function CardStack({ userEmail }: Props) {
         )}
       </AnimatePresence>
     </div>
-  );
-}
-
-function PullIndicator({
-  distance,
-  progress,
-  refreshing,
-  armed
-}: {
-  distance: number;
-  progress: number;
-  refreshing: boolean;
-  armed: boolean;
-}) {
-  if (distance <= 0 && !refreshing) return null;
-  return (
-    <motion.div
-      className="pointer-events-none absolute left-0 right-0 top-0 z-40 flex justify-center"
-      style={{ paddingTop: `calc(env(safe-area-inset-top) + ${distance}px)` }}
-    >
-      <div
-        className={`flex h-9 w-9 items-center justify-center rounded-full bg-surface shadow-tile ring-1 ring-line transition-colors ${
-          armed || refreshing ? "text-vondr-pop" : "text-ink-500"
-        }`}
-      >
-        {refreshing ? (
-          <RefreshCw size={16} className="animate-spin" />
-        ) : (
-          <ArrowDown
-            size={16}
-            className="transition-transform"
-            style={{
-              transform: `rotate(${Math.min(180, progress * 180)}deg)`
-            }}
-          />
-        )}
-      </div>
-    </motion.div>
   );
 }
 
@@ -398,58 +378,6 @@ function ActionButton({
   );
 }
 
-function Loading() {
-  return (
-    <div className="flex h-full items-center justify-center text-sm text-ink-400">
-      Kandidaten laden...
-    </div>
-  );
-}
-
-function ErrorState({
-  message,
-  onRetry
-}: {
-  message: string;
-  onRetry: () => void;
-}) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
-      <div className="text-3xl">⚠</div>
-      <h2 className="text-base font-semibold text-ink-900">Kon niet laden</h2>
-      <p className="max-w-xs text-sm text-ink-500">{message}</p>
-      <button
-        onClick={onRetry}
-        className="mt-2 rounded-full bg-vondr-dark-blue px-5 py-2 text-sm font-medium text-white active:scale-95"
-      >
-        Opnieuw proberen
-      </button>
-    </div>
-  );
-}
-
-function EmptyState({ onRefresh }: { onRefresh: () => void }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
-      <div className="text-4xl">✓</div>
-      <h2 className="text-xl font-semibold tracking-tight text-ink-900">
-        Klaar
-      </h2>
-      <p className="max-w-xs text-sm text-ink-500">
-        Geen suggesties meer. Sleep omlaag of tik op vernieuwen om te kijken
-        of MegaVondr nieuwe heeft gestuurd.
-      </p>
-      <button
-        onClick={onRefresh}
-        className="mt-2 inline-flex items-center gap-2 rounded-full bg-vondr-dark-blue px-5 py-2 text-sm font-medium text-white active:scale-95"
-      >
-        <RefreshCw size={14} />
-        Vernieuwen
-      </button>
-    </div>
-  );
-}
-
 function latestDecisionPerCandidate(votes: Vote[]): Map<string, Decision> {
   const byId = new Map<string, Vote>();
   for (const v of votes) {
@@ -459,4 +387,10 @@ function latestDecisionPerCandidate(votes: Vote[]): Map<string, Decision> {
   const out = new Map<string, Decision>();
   byId.forEach((v, id) => out.set(id, v.decision));
   return out;
+}
+
+function formatDate(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso;
+  return `${m[3]}-${m[2]}`;
 }
