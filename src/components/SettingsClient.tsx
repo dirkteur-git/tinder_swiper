@@ -163,12 +163,12 @@ export function SettingsClient({ userEmail, userId, lastSignIn }: Props) {
           </Row>
           <Row icon={<Github size={16} />} label="Code">
             <a
-              href="https://github.com/dirkteur-git/vondr-swiper"
+              href="https://github.com/dirkteur-git/vondr_swiper"
               target="_blank"
               rel="noreferrer"
               className="text-sm text-vondr-pop underline-offset-2 hover:underline"
             >
-              github.com/...vondr-swiper
+              github.com/...vondr_swiper
             </a>
           </Row>
         </Group>

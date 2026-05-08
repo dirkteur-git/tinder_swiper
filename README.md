@@ -142,7 +142,7 @@ public/
 
 ## Deploy naar Vercel
 
-1. Push naar GitHub (deze repo: `dirkteur-git/vondr-swiper`).
+1. Push naar GitHub (deze repo: `dirkteur-git/vondr_swiper`).
 2. [vercel.com/new](https://vercel.com/new) → importeer.
 3. Zet env-vars (zie hierboven).
 4. **Settings → Deployment Protection**: zet Vercel Authentication uit, anders
