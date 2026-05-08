@@ -29,6 +29,26 @@ function LoginForm() {
     }
   }, [initialError]);
 
+  async function onMicrosoft() {
+    setError(null);
+    setBusy(true);
+    const supabase = getSupabase();
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "";
+    const { error: authError } = await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: {
+        redirectTo: `${origin}/auth/callback`,
+        scopes: "email openid profile"
+      }
+    });
+    if (authError) {
+      setBusy(false);
+      setError(authError.message);
+    }
+    // Bij succes redirect Supabase de gebruiker naar Microsoft — geen verdere actie nodig.
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -100,7 +120,23 @@ function LoginForm() {
           </p>
         </div>
 
-        <form onSubmit={onSubmit} className="mt-8 space-y-3">
+        <button
+          type="button"
+          onClick={onMicrosoft}
+          disabled={busy}
+          className="mt-8 flex w-full items-center justify-center gap-3 rounded-xl bg-surface py-3 text-sm font-semibold text-ink-900 ring-1 ring-line transition active:scale-[0.98] disabled:opacity-50"
+        >
+          <MicrosoftLogo />
+          Inloggen met Microsoft
+        </button>
+
+        <div className="my-5 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-400">
+          <div className="flex-1 border-t border-line" />
+          <span>of met wachtwoord</span>
+          <div className="flex-1 border-t border-line" />
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-3">
           <Field
             label="E-mailadres"
             icon={<Mail size={16} className="text-ink-400" />}
@@ -182,6 +218,24 @@ function LoginForm() {
         </p>
       </div>
     </div>
+  );
+}
+
+function MicrosoftLogo() {
+  // Officieel 4-tegel logo (Fluent design)
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <rect width="11" height="11" x="0" y="0" fill="#F25022" />
+      <rect width="11" height="11" x="13" y="0" fill="#7FBA00" />
+      <rect width="11" height="11" x="0" y="13" fill="#00A4EF" />
+      <rect width="11" height="11" x="13" y="13" fill="#FFB900" />
+    </svg>
   );
 }
 

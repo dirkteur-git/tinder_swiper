@@ -13,9 +13,12 @@ export const metadata: Metadata = {
     title: "vondr"
   },
   icons: {
-    icon: [{ url: "/vondr-icon.png", type: "image/png" }],
-    apple: "/vondr-icon.png",
-    shortcut: "/vondr-icon.png"
+    icon: [
+      { url: "/vondr-icon-180.png", sizes: "180x180", type: "image/png" },
+      { url: "/vondr-icon-512.png", sizes: "512x512", type: "image/png" }
+    ],
+    apple: "/vondr-icon-180.png",
+    shortcut: "/vondr-icon-180.png"
   }
 };
 
