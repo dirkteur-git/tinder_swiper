@@ -6,6 +6,7 @@ import type {
   Candidate,
   Decision,
   Fact,
+  MediaItem,
   PeerVote,
   ReviewerProgress,
   Vote,
@@ -45,6 +46,8 @@ interface CandidateRow {
   created_at: string;
   batch_id: string | null;
   origin_candidate_id: string | null;
+  payload: Record<string, unknown> | null;
+  media: MediaItem[] | null;
 }
 
 interface VoteRow {
@@ -93,7 +96,10 @@ function rowToCandidate(r: CandidateRow): Candidate {
     status: r.status,
     createdAt: r.created_at,
     batchId: r.batch_id,
-    originCandidateId: r.origin_candidate_id ?? null
+    originCandidateId: r.origin_candidate_id ?? null,
+    payload:
+      r.payload && typeof r.payload === "object" ? r.payload : {},
+    media: Array.isArray(r.media) ? r.media : []
   };
 }
 

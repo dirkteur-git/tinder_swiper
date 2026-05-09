@@ -2,7 +2,15 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isAllowedEmail } from "@/lib/auth-whitelist";
 
-const PUBLIC_PREFIXES = ["/login", "/auth", "/_next", "/icon.svg", "/manifest.json", "/sw.js"];
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/auth",
+  "/api/v1", // ingest-API gebruikt eigen Bearer-auth
+  "/_next",
+  "/icon.svg",
+  "/manifest.json",
+  "/sw.js"
+];
 
 function isPublic(pathname: string): boolean {
   if (pathname === "/favicon.ico") return true;

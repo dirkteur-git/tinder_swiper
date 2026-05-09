@@ -58,6 +58,15 @@ export interface BatchProgress {
   awaitingCompare: boolean;
 }
 
+/** Eén media-item op een suggestie — afbeelding, PDF, ... */
+export interface MediaItem {
+  kind: "image" | "pdf" | "video" | "url";
+  url: string;
+  alt?: string;
+  /** Optionele label: "huidig", "voorstel A", "v3", ... */
+  label?: string;
+}
+
 export interface Candidate {
   id: string;
   externalId: string;
@@ -77,6 +86,10 @@ export interface Candidate {
   batchId: string | null;
   /** Bij afstem-kandidaten verwijst dit naar de oorspronkelijke candidate uit ronde 1. */
   originCandidateId: string | null;
+  /** Type-specifieke data — schema verschilt per type. */
+  payload: Record<string, unknown>;
+  /** Afbeeldingen / PDF's / video's bij deze suggestie (visuele types). */
+  media: MediaItem[];
 }
 
 /** Stem van de andere reviewer op een originele candidate, getoond op de afstem-kaart. */

@@ -7,8 +7,8 @@ import Link from "next/link";
 import {
   ArrowLeft,
   ArrowUp,
-  Check,
   ListChecks,
+  Plus,
   RotateCcw,
   X
 } from "lucide-react";
@@ -290,40 +290,38 @@ export function BatchStackClient({
 
       {!loading && remaining > 0 && (
         <div
-          className="safe-bottom relative z-30 flex items-center justify-center gap-5 border-t border-line bg-bg px-6 pb-6 pt-4"
+          className="safe-bottom relative z-30 flex items-center justify-around gap-3 border-t border-line bg-bg px-6 pb-6 pt-3"
           onPointerDownCapture={() => haptic.unlock()}
         >
-          <ActionButton
+          <FabAction
             onClick={() => topCardRef.current?.swipeDecision("no")}
-            color="no"
-            label="Nee"
+            kind="ghost"
+            label="Afwijzen"
           >
-            <X size={26} strokeWidth={3} />
-          </ActionButton>
-          <ActionButton
+            <X size={22} strokeWidth={2} />
+          </FabAction>
+          <FabAction
             onClick={handleUndo}
-            color="undo"
+            kind="small"
             label="Undo"
-            small
             disabled={history.length === 0}
           >
-            <RotateCcw size={18} strokeWidth={2.5} />
-          </ActionButton>
-          <ActionButton
+            <RotateCcw size={16} strokeWidth={2} />
+          </FabAction>
+          <FabAction
             onClick={() => topCardRef.current?.swipeDecision("maybe")}
-            color="maybe"
-            label="Pas — bespreek met de ander"
-            small
+            kind="small"
+            label="Pas"
           >
-            <ArrowUp size={20} strokeWidth={2.5} />
-          </ActionButton>
-          <ActionButton
+            <ArrowUp size={18} strokeWidth={2} />
+          </FabAction>
+          <FabAction
             onClick={() => topCardRef.current?.swipeDecision("yes")}
-            color="yes"
-            label="Ja"
+            kind="primary"
+            label="Toevoegen"
           >
-            <Check size={26} strokeWidth={3} />
-          </ActionButton>
+            <Plus size={24} strokeWidth={2.4} />
+          </FabAction>
         </div>
       )}
 
@@ -342,39 +340,50 @@ export function BatchStackClient({
   );
 }
 
-function ActionButton({
+function FabAction({
   onClick,
-  color,
+  kind,
   label,
-  small,
   disabled,
   children
 }: {
   onClick: () => void;
-  color: "yes" | "no" | "maybe" | "undo";
+  kind: "primary" | "ghost" | "small";
   label: string;
-  small?: boolean;
   disabled?: boolean;
   children: React.ReactNode;
 }) {
-  const sizeCls = small ? "h-12 w-12" : "h-16 w-16";
-  const colorCls =
-    color === "yes"
-      ? "bg-white text-accent-yes ring-accent-yes/40"
-      : color === "no"
-        ? "bg-white text-accent-no ring-accent-no/40"
-        : color === "maybe"
-          ? "bg-white text-accent-maybe ring-accent-maybe/40"
-          : "bg-white text-ink-500 ring-line";
+  const sizeCls =
+    kind === "primary"
+      ? "h-14 w-14"
+      : kind === "ghost"
+        ? "h-12 w-12"
+        : "h-10 w-10";
+  const styleCls =
+    kind === "primary"
+      ? "bg-vondr-pop text-white shadow-card border-2 border-vondr-pop hover:bg-vondr-dark-blue hover:border-vondr-dark-blue"
+      : kind === "ghost"
+        ? "bg-surface text-vondr-dark-blue border-2 border-line hover:border-vondr-dark-blue"
+        : "bg-surface text-ink-700 border border-line hover:border-vondr-dark-blue";
+
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      className={`flex ${sizeCls} items-center justify-center rounded-full ${colorCls} shadow-tile ring-1 transition active:scale-90 disabled:opacity-40 disabled:active:scale-100`}
-    >
-      {children}
-    </button>
+    <div className="flex flex-col items-center gap-1.5">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+        className={`flex ${sizeCls} items-center justify-center rounded-full ${styleCls} transition active:scale-95 disabled:opacity-40 disabled:active:scale-100`}
+      >
+        {children}
+      </button>
+      <span
+        className={`text-[10px] font-medium uppercase tracking-[0.04em] ${
+          kind === "primary" ? "text-vondr-dark-blue" : "text-ink-400"
+        }`}
+      >
+        {label}
+      </span>
+    </div>
   );
 }
 
