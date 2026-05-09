@@ -19,14 +19,17 @@ const config: Config = {
         },
         "dark-section": "#0a1628",
 
-        // — semantische aliases (mappen op vondr + grijs-schaal) —
+        // — semantische aliases —
+        // bg = de page-achtergrond (wit, zoals het phone-interior in de mockup).
+        // surface = subtiel grijs voor secundaire vlakken (chips, mini-tegels, edit-zones)
+        // zodat cards op witte page nog contrast hebben via border, niet via bg-verschil.
         bg: {
-          DEFAULT: "#F2F5F2", // vondr.white
-          soft: "#FFFFFF"
+          DEFAULT: "#FFFFFF", // page = wit
+          soft: "#F7F9F7"     // alternatief: licht-grijs voor sub-blokken
         },
         surface: {
-          DEFAULT: "#FFFFFF",
-          soft: "#FAFBFA"
+          DEFAULT: "#FFFFFF", // cards blijven wit + border voor scheiding
+          soft: "#F7F9F7"     // chips, mini-vakken, edit-velden
         },
         ink: {
           900: "#13102D", // vondr.dark-blue
