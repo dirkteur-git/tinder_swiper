@@ -43,7 +43,9 @@ export function CardStack({ userEmail }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [stack, setStack] = useState<Candidate[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [showMatch, setShowMatch] = useState(false);
+  const [matchedCandidate, setMatchedCandidate] = useState<Candidate | null>(
+    null
+  );
   const [editing, setEditing] = useState<Candidate | null>(null);
   const topCardRef = useRef<SwipeCardHandle | null>(null);
   const [totalForSession, setTotalForSession] = useState(0);
@@ -105,8 +107,12 @@ export function CardStack({ userEmail }: Props) {
       );
       setHistory((h) => [...h, { candidate: c, voteId: vote.id, decision }]);
       if (decision === "yes") {
-        setShowMatch(true);
-        window.setTimeout(() => setShowMatch(false), 1500);
+        setMatchedCandidate(c);
+        window.setTimeout(
+          () =>
+            setMatchedCandidate((current) => (current === c ? null : current)),
+          3500
+        );
       }
     } catch (e) {
       setStack((s) => [c, ...s]);
@@ -305,7 +311,12 @@ export function CardStack({ userEmail }: Props) {
       )}
 
       <AnimatePresence>
-        {showMatch && <MatchOverlay onDismiss={() => setShowMatch(false)} />}
+        {matchedCandidate && (
+          <MatchOverlay
+            item={matchedCandidate}
+            onDismiss={() => setMatchedCandidate(null)}
+          />
+        )}
       </AnimatePresence>
 
       <AnimatePresence>

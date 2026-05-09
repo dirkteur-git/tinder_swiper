@@ -247,8 +247,10 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
       transition={{ type: "spring", stiffness: 320, damping: 32 }}
     >
       <div className="no-select relative flex h-full w-full flex-col gap-vondr-m overflow-hidden rounded-2xl border border-line bg-surface px-5 py-vondr-l pl-6 shadow-card">
-        {/* Topic-spine — 3px verticale lijn links */}
-        <div className="absolute left-0 top-[18px] bottom-[18px] w-[3px] rounded-r-full bg-vondr-dark-blue" />
+        {/* Topic-spine — 3px verticale lijn links, kleur per type-tone */}
+        <div
+          className={`absolute left-0 top-[18px] bottom-[18px] w-[3px] rounded-r-full ${spineToneFor(candidate.type)}`}
+        />
 
         {/* Tint-overlay tijdens drag */}
         <motion.div
@@ -360,6 +362,27 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
     </motion.div>
   );
 });
+
+/**
+ * Spine-tone per type:
+ * - "warm" (oranje pop) — creatieve / visuele kandidaten
+ * - "cool" (light-blue) — vraag/antwoord-types die nog input nodig hebben
+ * - "mono" (dark-blue, default) — feiten, regels, beslissingen
+ */
+function spineToneFor(type: string): string {
+  if (
+    type === "Brand-asset" ||
+    type === "Visual-mockup" ||
+    type === "Brand-regel" ||
+    type === "Copy-keuze"
+  ) {
+    return "bg-vondr-pop";
+  }
+  if (type === "Nieuwe FAQ" || type === "Antwoord-update") {
+    return "bg-vondr-light-blue";
+  }
+  return "bg-vondr-dark-blue";
+}
 
 function CardMedia({
   media,

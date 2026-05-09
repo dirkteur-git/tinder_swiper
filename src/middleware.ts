@@ -6,6 +6,7 @@ const PUBLIC_PREFIXES = [
   "/login",
   "/auth",
   "/api/v1", // ingest-API gebruikt eigen Bearer-auth
+  "/dev",    // design-preview met mock-data
   "/_next",
   "/icon.svg",
   "/manifest.json",

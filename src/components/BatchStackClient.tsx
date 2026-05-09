@@ -229,9 +229,11 @@ export function BatchStackClient({
               ? "laden..."
               : remaining === 0
                 ? "alles beslist — door naar samenvatting"
-                : `${remaining} te gaan · ${done} klaar`}
+                : `${remaining} te gaan`}
           </span>
-          <span className="text-ink-400">{total} totaal</span>
+          <span className="font-mono tabular-nums text-ink-400">
+            {total === 0 ? "0/0" : `${Math.min(done + 1, total)}/${total}`}
+          </span>
         </div>
       </div>
 
