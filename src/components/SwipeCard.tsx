@@ -9,13 +9,11 @@ import {
 } from "framer-motion";
 import { forwardRef, useImperativeHandle, useState, useRef } from "react";
 import {
-  ArrowUp,
   FileText,
   Hand,
   Image as ImageIcon,
-  Mic,
+  Info,
   Plus,
-  User,
   Video,
   X as XIcon
 } from "lucide-react";
@@ -82,7 +80,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
   });
   const maybeOpacity = useTransform(y, [-130, -30], [1, 0]);
 
-  // Subtiele tint over de hele kaart bij voorbij-de-helft swipen.
+  // Verkeerslicht-tints: groen=ja, rood=nee, blauw=pas.
   const overlayBg = useTransform(
     [x, y] as const,
     ([latestX, latestY]: number[]) => {
@@ -90,16 +88,16 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
       const ax = Math.abs(latestX);
       const ay = Math.abs(latestY);
       if (latestY < -30 && ay > ax) {
-        const a = Math.min(0.14, ay / 700);
-        return `rgba(179, 198, 212, ${a})`; // vondr-light-blue voor PAS
+        const a = Math.min(0.16, ay / 700);
+        return `rgba(37, 99, 235, ${a})`; // accent-maybe (blauw)
       }
       if (xFlipped > 30) {
-        const a = Math.min(0.14, xFlipped / 700);
-        return `rgba(255, 79, 0, ${a})`; // vondr-pop voor JA
+        const a = Math.min(0.16, xFlipped / 700);
+        return `rgba(22, 163, 74, ${a})`; // accent-yes (groen)
       }
       if (xFlipped < -30) {
-        const a = Math.min(0.14, -xFlipped / 700);
-        return `rgba(19, 16, 45, ${a})`; // vondr-dark-blue voor NEE
+        const a = Math.min(0.16, -xFlipped / 700);
+        return `rgba(220, 38, 38, ${a})`; // accent-no (rood)
       }
       return "rgba(0,0,0,0)";
     }
@@ -200,16 +198,6 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
 
   const tapStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
 
-  // Tags uit facts: pak max 3 'value'-strings van facts_json.
-  const tagValues = (candidate.facts ?? [])
-    .map((f) => f.value)
-    .filter((v) => v && v.trim().length > 0)
-    .slice(0, 3);
-
-  const sourceLabel = candidate.bron
-    ? candidate.bron.replace(/^transcript\s+/i, "")
-    : candidate.klantNaam ?? "—";
-
   return (
     <motion.div
       data-card-drag
@@ -235,6 +223,9 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
         const start = tapStartRef.current;
         tapStartRef.current = null;
         if (!start || !isTop) return;
+        // Skip als de tap op een no-swipe element zat (Info-knop e.d.)
+        const target = e.target as HTMLElement | null;
+        if (target?.closest("[data-no-swipe]")) return;
         const dx = Math.abs(e.clientX - start.x);
         const dy = Math.abs(e.clientY - start.y);
         const dt = Date.now() - start.t;
@@ -258,12 +249,12 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
           style={{ backgroundColor: overlayBg }}
         />
 
-        {/* Edge-bars: pill met icon + label, fade-in tijdens drag */}
+        {/* Edge-bars: pill met icon + label, fade-in tijdens drag.
+            Groen/rood/blauw conventie. */}
         {isTop && (
           <div className="pointer-events-none absolute inset-0 z-30">
-            {/* JA — staat aan de TEGENOVERGESTELDE kant van de yes-swipe */}
             <motion.div
-              className={`absolute top-1/2 inline-flex -translate-y-1/2 items-center gap-1.5 rounded-full border-2 border-vondr-pop bg-surface px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-vondr-pop ${
+              className={`absolute top-1/2 inline-flex -translate-y-1/2 items-center gap-1.5 rounded-full border-2 border-accent-yes bg-surface px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-yes ${
                 handedness === "left" ? "right-3.5" : "left-3.5"
               }`}
               style={{ opacity: yesOpacity }}
@@ -272,7 +263,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
               Toevoegen
             </motion.div>
             <motion.div
-              className={`absolute top-1/2 inline-flex -translate-y-1/2 items-center gap-1.5 rounded-full border-2 border-vondr-dark-blue bg-surface px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-vondr-dark-blue ${
+              className={`absolute top-1/2 inline-flex -translate-y-1/2 items-center gap-1.5 rounded-full border-2 border-accent-no bg-surface px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-no ${
                 handedness === "left" ? "left-3.5" : "right-3.5"
               }`}
               style={{ opacity: noOpacity }}
@@ -281,7 +272,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
               Afwijzen
             </motion.div>
             <motion.div
-              className="absolute left-1/2 top-3.5 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border-2 border-vondr-light-blue bg-surface px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-vondr-dark-blue"
+              className="absolute left-1/2 top-3.5 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border-2 border-accent-maybe bg-surface px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-maybe"
               style={{ opacity: maybeOpacity }}
             >
               <Hand size={14} strokeWidth={2.4} />
@@ -290,21 +281,28 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
           </div>
         )}
 
-        {/* Header: topic-pill + source */}
-        <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-vondr-dark-blue px-2.5 py-1 text-[11px] font-medium leading-none text-vondr-white">
-            {candidate.type}
-          </span>
-          <span className="inline-flex items-center gap-1.5 truncate text-[12px] font-medium text-ink-500">
-            <Mic size={13} className="flex-shrink-0 text-ink-400" />
-            <span className="truncate">{sourceLabel}</span>
-          </span>
-        </div>
+        {/* Info-knop voor "meer details" — tap-target rechtsboven (de hele
+            kaart-tap werkt ook, dit is gewoon een duidelijkere affordance). */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onTap(candidate);
+          }}
+          aria-label="Meer details"
+          data-no-swipe
+          className="pointer-events-auto absolute right-3.5 top-3.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-surface text-ink-400 ring-1 ring-line transition active:scale-90 hover:text-vondr-dark-blue"
+        >
+          <Info size={15} strokeWidth={2} />
+        </button>
 
-        {/* Hero: media (bij visuele types) of tekst */}
-        <div className="flex flex-1 flex-col gap-2.5 overflow-hidden">
+        {/* Hoofd: media (visuele types) of vraag + antwoord */}
+        <div className="flex flex-1 flex-col gap-3 overflow-hidden pr-8">
           {candidate.media.length > 0 ? (
-            <CardMedia media={candidate.media} suggestion={candidate.suggestion} />
+            <CardMedia
+              media={candidate.media}
+              suggestion={candidate.suggestion}
+            />
           ) : (
             <>
               <h1 className="text-[22px] font-semibold leading-[1.2] tracking-[-0.015em] text-vondr-dark-blue [text-wrap:pretty]">
@@ -312,50 +310,13 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
               </h1>
 
               {candidate.proposedAnswer && (
-                <p className="line-clamp-6 text-sm leading-[1.55] text-ink-700 [text-wrap:pretty]">
+                <p className="line-clamp-[10] text-[15px] leading-[1.55] text-ink-700 [text-wrap:pretty]">
                   {candidate.proposedAnswer}
                 </p>
-              )}
-
-              {candidate.klantQuote && (
-                <div className="mt-auto border-l-2 border-vondr-pop pl-3">
-                  <p className="line-clamp-3 text-[13px] italic leading-snug text-ink-500">
-                    &ldquo;{candidate.klantQuote}&rdquo;
-                  </p>
-                </div>
               )}
             </>
           )}
         </div>
-
-        {/* Footer: tags + voorgesteld door */}
-        {(tagValues.length > 0 || candidate.klantNaam) && (
-          <div className="flex flex-col gap-2 border-t border-line/50 pt-2.5">
-            {tagValues.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {tagValues.map((t, i) => (
-                  <span
-                    key={i}
-                    className="rounded-full border border-line bg-bg px-2 py-1 text-[11px] font-medium text-ink-700"
-                  >
-                    {t.length > 32 ? `${t.slice(0, 30)}…` : t}
-                  </span>
-                ))}
-              </div>
-            )}
-            {candidate.klantNaam && (
-              <div className="inline-flex items-center gap-1.5 text-[11.5px] text-ink-500">
-                <User size={12} className="text-ink-400" />
-                <span>
-                  voorgesteld vanuit gesprek met{" "}
-                  <strong className="font-medium text-ink-700">
-                    {candidate.klantNaam}
-                  </strong>
-                </span>
-              </div>
-            )}
-          </div>
-        )}
 
         {peerVote && <PeerContext peer={peerVote} />}
       </div>

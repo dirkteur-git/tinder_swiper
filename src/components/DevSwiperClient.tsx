@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   ArrowUp,
@@ -13,6 +13,7 @@ import { SwipeCard, SwipeCardHandle, SwipeDirection } from "./SwipeCard";
 import { MOCK_CANDIDATES } from "@/lib/mock-candidates";
 import type { Candidate, Decision } from "@/lib/types";
 import { MatchOverlay } from "./MatchOverlay";
+import { FabAction } from "./FabAction";
 import * as haptic from "@/lib/haptic";
 
 interface HistoryItem {
@@ -71,8 +72,8 @@ export function DevSwiperClient() {
 
   return (
     <div className="relative flex h-[100dvh] flex-col bg-bg">
-      {/* Header: filter-chips links, counter rechts */}
-      <header className="safe-top safe-x relative z-30 flex items-center gap-2 border-b border-line bg-bg/95 px-4 pb-3 pt-3 backdrop-blur">
+      {/* Header — terug + counter rechts */}
+      <header className="safe-top safe-x relative z-30 flex items-center gap-2 px-4 pb-2 pt-3">
         <a
           href="/"
           className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-ink-700 active:scale-95"
@@ -80,7 +81,22 @@ export function DevSwiperClient() {
         >
           <ArrowLeft size={18} />
         </a>
-        <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto scroll-soft">
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-400">
+            Design-preview · refresh = reset
+          </div>
+          <h1 className="truncate text-base font-semibold text-vondr-dark-blue">
+            Toevoegen FAQ · week 19
+          </h1>
+        </div>
+        <span className="flex-shrink-0 font-mono text-[12px] tabular-nums text-ink-500">
+          {total === 0 ? "0/0" : `${Math.min(done + 1, total)}/${total}`}
+        </span>
+      </header>
+
+      {/* Filter-chips */}
+      <div className="px-4 pb-3">
+        <div className="flex min-w-0 gap-1.5 overflow-x-auto scroll-soft">
           {FILTERS.map((f) => (
             <button
               key={f}
@@ -88,21 +104,13 @@ export function DevSwiperClient() {
               className={`flex-shrink-0 rounded-full border px-3 py-1.5 text-[12px] font-medium transition ${
                 filter === f
                   ? "border-vondr-dark-blue bg-vondr-dark-blue text-vondr-white"
-                  : "border-line bg-surface text-ink-700"
+                  : "border-line bg-bg text-ink-700"
               }`}
             >
               {f}
             </button>
           ))}
         </div>
-        <span className="flex-shrink-0 font-mono text-[12px] tabular-nums text-ink-500">
-          {total === 0 ? "0/0" : `${Math.min(done + 1, total)}/${total}`}
-        </span>
-      </header>
-
-      {/* Demo-banner */}
-      <div className="bg-vondr-pop/[0.08] px-vondr-l py-2 text-center text-[11px] font-medium text-vondr-pop">
-        Design-preview · geen Supabase, geen login · refresh = reset
       </div>
 
       {/* Card-area */}
@@ -162,6 +170,7 @@ export function DevSwiperClient() {
           <FabAction
             onClick={() => topCardRef.current?.swipeDecision("no")}
             kind="ghost"
+            tone="no"
             label="Afwijzen"
           >
             <X size={22} strokeWidth={2} />
@@ -169,6 +178,7 @@ export function DevSwiperClient() {
           <FabAction
             onClick={handleUndo}
             kind="small"
+            tone="neutral"
             label="Undo"
             disabled={history.length === 0}
           >
@@ -177,6 +187,7 @@ export function DevSwiperClient() {
           <FabAction
             onClick={() => topCardRef.current?.swipeDecision("maybe")}
             kind="small"
+            tone="maybe"
             label="Pas"
           >
             <ArrowUp size={18} strokeWidth={2} />
@@ -184,6 +195,7 @@ export function DevSwiperClient() {
           <FabAction
             onClick={() => topCardRef.current?.swipeDecision("yes")}
             kind="primary"
+            tone="yes"
             label="Toevoegen"
           >
             <Plus size={24} strokeWidth={2.4} />
@@ -204,50 +216,3 @@ export function DevSwiperClient() {
   );
 }
 
-function FabAction({
-  onClick,
-  kind,
-  label,
-  disabled,
-  children
-}: {
-  onClick: () => void;
-  kind: "primary" | "ghost" | "small";
-  label: string;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  const sizeCls =
-    kind === "primary"
-      ? "h-14 w-14"
-      : kind === "ghost"
-        ? "h-12 w-12"
-        : "h-10 w-10";
-  const styleCls =
-    kind === "primary"
-      ? "bg-vondr-pop text-white shadow-card border-2 border-vondr-pop hover:bg-vondr-dark-blue hover:border-vondr-dark-blue"
-      : kind === "ghost"
-        ? "bg-surface text-vondr-dark-blue border-2 border-line hover:border-vondr-dark-blue"
-        : "bg-surface text-ink-700 border border-line hover:border-vondr-dark-blue";
-
-  return (
-    <div className="flex flex-col items-center gap-1.5">
-      <motion.button
-        onClick={onClick}
-        disabled={disabled}
-        aria-label={label}
-        whileTap={{ scale: 0.92 }}
-        className={`flex ${sizeCls} items-center justify-center rounded-full ${styleCls} transition disabled:opacity-40`}
-      >
-        {children}
-      </motion.button>
-      <span
-        className={`text-[10px] font-medium uppercase tracking-[0.04em] ${
-          kind === "primary" ? "text-vondr-dark-blue" : "text-ink-400"
-        }`}
-      >
-        {label}
-      </span>
-    </div>
-  );
-}

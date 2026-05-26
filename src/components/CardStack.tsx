@@ -24,6 +24,7 @@ import {
 import { SwipeCard, SwipeCardHandle, SwipeDirection } from "./SwipeCard";
 import { MatchOverlay } from "./MatchOverlay";
 import { EditSheet } from "./EditSheet";
+import { FabAction } from "./FabAction";
 import { BrandWordmark } from "./BrandWordmark";
 import * as haptic from "@/lib/haptic";
 import { usePullToRefresh } from "@/lib/use-pull-to-refresh";
@@ -281,6 +282,7 @@ export function CardStack({ userEmail }: Props) {
           <FabAction
             onClick={() => topCardRef.current?.swipeDecision("no")}
             kind="ghost"
+            tone="no"
             label="Afwijzen"
           >
             <X size={22} strokeWidth={2} />
@@ -288,6 +290,7 @@ export function CardStack({ userEmail }: Props) {
           <FabAction
             onClick={handleUndo}
             kind="small"
+            tone="neutral"
             label="Undo"
             disabled={history.length === 0}
           >
@@ -296,6 +299,7 @@ export function CardStack({ userEmail }: Props) {
           <FabAction
             onClick={() => topCardRef.current?.swipeDecision("maybe")}
             kind="small"
+            tone="maybe"
             label="Pas"
           >
             <ArrowUp size={18} strokeWidth={2} />
@@ -303,6 +307,7 @@ export function CardStack({ userEmail }: Props) {
           <FabAction
             onClick={() => topCardRef.current?.swipeDecision("yes")}
             kind="primary"
+            tone="yes"
             label="Toevoegen"
           >
             <Plus size={24} strokeWidth={2.4} />
@@ -368,53 +373,6 @@ function PullIndicator({
         )}
       </div>
     </motion.div>
-  );
-}
-
-function FabAction({
-  onClick,
-  kind,
-  label,
-  disabled,
-  children
-}: {
-  onClick: () => void;
-  kind: "primary" | "ghost" | "small";
-  label: string;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  const sizeCls =
-    kind === "primary"
-      ? "h-14 w-14"
-      : kind === "ghost"
-        ? "h-12 w-12"
-        : "h-10 w-10";
-  const styleCls =
-    kind === "primary"
-      ? "bg-vondr-pop text-white shadow-card border-2 border-vondr-pop hover:bg-vondr-dark-blue hover:border-vondr-dark-blue"
-      : kind === "ghost"
-        ? "bg-surface text-vondr-dark-blue border-2 border-line hover:border-vondr-dark-blue"
-        : "bg-surface text-ink-700 border border-line hover:border-vondr-dark-blue";
-
-  return (
-    <div className="flex flex-col items-center gap-1.5">
-      <button
-        onClick={onClick}
-        disabled={disabled}
-        aria-label={label}
-        className={`flex ${sizeCls} items-center justify-center rounded-full ${styleCls} transition active:scale-95 disabled:opacity-40 disabled:active:scale-100`}
-      >
-        {children}
-      </button>
-      <span
-        className={`text-[10px] font-medium uppercase tracking-[0.04em] ${
-          kind === "primary" ? "text-vondr-dark-blue" : "text-ink-400"
-        }`}
-      >
-        {label}
-      </span>
-    </div>
   );
 }
 
